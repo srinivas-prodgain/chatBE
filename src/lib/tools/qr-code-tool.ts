@@ -4,7 +4,7 @@ import QRCode from "qrcode";
 
 
 
-export const generateQRCode = tool({
+export const qr_code_tool = tool({
     description: 'Generate a QR code for text, URL, or other data',
     parameters: z.object({
         data: z.string().describe('The data to encode in the QR code (URL, text, etc.)'),

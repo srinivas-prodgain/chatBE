@@ -1,14 +1,9 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema } from 'mongoose';
+import { TConversation } from '../types/conversation';
 
-export interface IConversation extends Document {
-  uid: string;
-  title: string;
-  userId?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
 
-const conversationSchema = new Schema<IConversation>({
+
+const conversationSchema = new Schema<TConversation>({
   uid: {
     type: String,
     required: true,
@@ -32,4 +27,4 @@ const conversationSchema = new Schema<IConversation>({
 
 
 
-export const Conversation = mongoose.model<IConversation>('Conversation', conversationSchema);
+export const Conversation = mongoose.model<TConversation>('Conversation', conversationSchema);

@@ -1,13 +1,8 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema } from 'mongoose';
 
-export interface IChatMessage extends Document {
-  message: string;
-  sender: 'user' | 'ai';
-  timestamp: Date;
-  conversationId: mongoose.Types.ObjectId;
-}
+import { TMessage } from '../types/message';
 
-const chatMessageSchema = new Schema<IChatMessage>({
+const chatMessageSchema = new Schema<TMessage>({
   message: {
     type: String,
     required: true
@@ -32,4 +27,4 @@ const chatMessageSchema = new Schema<IChatMessage>({
 // Create index for better query performance
 chatMessageSchema.index({ conversationId: 1, timestamp: 1 });
 
-export const ChatMessage = mongoose.model<IChatMessage>('ChatMessage', chatMessageSchema);
+export const ChatMessage = mongoose.model<TMessage>('ChatMessage', chatMessageSchema);

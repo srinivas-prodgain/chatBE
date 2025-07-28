@@ -2,12 +2,11 @@ import { z } from 'zod';
 import { tool } from 'ai';
 
 import { ChatMessage } from '../../models/chat';
-import { Conversation } from '../../models/conversation';
 
 
 
 
-export const fetchConversationHistory = tool({
+export const mongo_db_tool = tool({
     description: 'Fetch conversation history from MongoDB. Use this when you need to reference previous messages or conversations.',
     parameters: z.object({
         conversationId: z.string().describe('The conversation ID to fetch messages from'),

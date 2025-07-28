@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { AppError } from '../utils/errors';
 
-interface ErrorResponse {
+type TErrorResponse = {
     error: string;
     message?: string;
     details?: any;
@@ -24,6 +24,13 @@ export const globalErrorHandler = (
         statusCode = error.statusCode;
         message = error.message;
         console.log("AppError", error.message);
+    }
+
+    // Handle errors from throw_error utility
+    else if ((error as any).status_code) {
+        statusCode = (error as any).status_code;
+        message = error.message;
+        console.log("CustomError", error.message);
     }
 
     // Handle Zod validation errors
@@ -60,7 +67,7 @@ export const globalErrorHandler = (
         console.log("MongoError", error.message);
     }
 
-    const errorResponse: ErrorResponse = {
+    const errorResponse: TErrorResponse = {
         error: message
     };
 
