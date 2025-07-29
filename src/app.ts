@@ -19,6 +19,8 @@ app.use(cors({
     origin: [
         'http://localhost:3000',
         'https://trailchatapp.vercel.app',
+        'https://trailchatapp-git-main-teja-reddys-projects-581d80aa.vercel.app',
+        /^https:\/\/trailchatapp.*\.vercel\.app$/,  // Allow all Vercel preview deployments
         ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : [])
     ],
     credentials: true,
