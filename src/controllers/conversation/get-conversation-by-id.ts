@@ -17,8 +17,8 @@ export const get_conversation_by_id = async (req: Request, res: Response) => {
 
     // Get messages separately using conversationId
     const messages = await mg.ChatMessage.find({ conversationId: conversation._id })
-        .sort({ timestamp: 1 })
-        .select('message sender timestamp');
+        .sort({ createdAt: 1 })
+        .select('message sender createdAt');
 
     // Return conversation with messages in the new populated format
     const conversationWithMessages = {

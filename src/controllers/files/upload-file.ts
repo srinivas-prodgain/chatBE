@@ -3,8 +3,16 @@ import fs from 'fs';
 import path from 'path';
 
 import { ALLOWED_FILE_EXTENSIONS, MAX_FILE_SIZE } from '../../types/file';
-import { documentEmbeddingsMongoDBService } from '../../lib/document-embeddings-mongodb-service';
+import { documentEmbeddingsMongoDBService, TProcessedDocument } from '../../lib/document-embeddings-mongodb-service';
 
+// Upload response type (without chunks to reduce payload size)
+export type TUploadResponse = {
+    fileId: string;
+    fileName: string;
+    fileSize: number;
+    fileType: string;
+    chunksCreated: number;
+}
 
 export const handle_upload = async (req: Request, res: Response) => {
     if (!req.file) {
@@ -77,9 +85,10 @@ export const handle_upload = async (req: Request, res: Response) => {
 
         console.log(`File processed successfully: ${req.file.originalname} (${processedDocument.chunksCreated} chunks)`);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
         console.error('File processing error:', error);
-        send_upload_error(uploadId, `File processing failed: ${error.message}`, res);
+        send_upload_error(uploadId, `File processing failed: ${errorMessage}`, res);
 
         if (fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
@@ -123,7 +132,7 @@ const send_upload_error = (uploadId: string, message: string, res: Response): vo
     res.end();
 };
 
-const send_upload_complete = (uploadId: string, data: any, res: Response): void => {
+const send_upload_complete = (uploadId: string, data: TUploadResponse, res: Response): void => {
     const eventData = {
         type: 'complete',
         uploadId,

@@ -12,19 +12,15 @@ const chatMessageSchema = new Schema<TMessage>({
     enum: ['user', 'ai'],
     required: true
   },
-  timestamp: {
-    type: Date,
-    default: Date.now
-  },
   conversationId: {
     type: Schema.Types.ObjectId,
     ref: 'Conversation',
     required: true,
     index: true
   }
-});
+}, { timestamps: true });
 
 // Create index for better query performance
-chatMessageSchema.index({ conversationId: 1, timestamp: 1 });
+chatMessageSchema.index({ conversationId: 1, createdAt: 1 });
 
 export const ChatMessage = mongoose.model<TMessage>('ChatMessage', chatMessageSchema);

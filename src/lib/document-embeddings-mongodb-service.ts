@@ -34,6 +34,25 @@ export type TProcessedDocument = {
     chunks: TDocumentChunk[];
 }
 
+// New types for search results
+export type TSearchResult = {
+    content: string;
+    metadata: TDocumentMetadata;
+    similarity: number;
+}
+
+export type TSearchResults = string[][];
+
+export type TFileMetadata = {
+    file_id: string;
+    file_name: string;
+    file_size: number;
+    file_type: string;
+    upload_date: string;
+    chunk_count: number;
+    processing_status: 'processing' | 'completed' | 'failed';
+}
+
 export class DocumentEmbeddingsMongoDBService {
     private static instance: DocumentEmbeddingsMongoDBService;
 
@@ -142,7 +161,8 @@ export class DocumentEmbeddingsMongoDBService {
                 chunks
             };
 
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             console.error('Error processing document:', error);
 
             // Update document file status to failed
@@ -151,15 +171,15 @@ export class DocumentEmbeddingsMongoDBService {
                     { file_id: fileId },
                     {
                         processing_status: 'failed',
-                        error_message: error.message
+                        error_message: errorMessage
                     }
                 );
             } catch (updateError) {
                 console.error('Error updating document file status:', updateError);
             }
 
-            progressCallback?.(0, `Error: ${error.message}`);
-            throw new Error(`Document processing failed: ${error.message}`);
+            progressCallback?.(0, `Error: ${errorMessage}`);
+            throw new Error(`Document processing failed: ${errorMessage}`);
         }
     }
 
@@ -293,13 +313,14 @@ export class DocumentEmbeddingsMongoDBService {
             }
 
             console.log(`Successfully stored ${chunks.length} chunks with embeddings in MongoDB`);
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             console.error('Error storing in MongoDB:', error);
-            throw new Error(`Failed to store in database: ${error.message}`);
+            throw new Error(`Failed to store in database: ${errorMessage}`);
         }
     }
 
-    async searchSimilarDocuments(query: string, maxResults: number = 5): Promise<any[]> {
+    async searchSimilarDocuments(query: string, maxResults: number = 5): Promise<TSearchResults> {
         try {
             // Generate embedding for the search query
             const queryEmbedding = await getEmbedding(query);
@@ -311,7 +332,7 @@ export class DocumentEmbeddingsMongoDBService {
             const pipeline = [
                 {
                     $vectorSearch: {
-                        index: "document_vector_index_2",
+                        index: "document_vector_index",
                         path: "embedding",
                         queryVector: queryEmbedding,
                         numCandidates: maxResults * 10,
@@ -337,12 +358,13 @@ export class DocumentEmbeddingsMongoDBService {
 
             // console.log('Results:', results);
 
-            // Format results similar to your original implementation
-            return [results.map(r => r.content)];
+            // Format results to match expected usage pattern (array of string arrays)
+            return [results.map((r: { content: string }) => r.content)];
 
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             console.error('Error searching documents:', error);
-            throw new Error(`Search failed: ${error.message}`);
+            throw new Error(`Search failed: ${errorMessage}`);
         }
     }
 
@@ -356,32 +378,15 @@ export class DocumentEmbeddingsMongoDBService {
             await mg.DocumentFile.deleteOne({ file_id: fileId });
 
             console.log(`Deleted ${deleteResult.deletedCount} chunks for file ${fileId}`);
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             console.error('Error deleting document:', error);
-            throw new Error(`Failed to delete document: ${error.message}`);
+            throw new Error(`Failed to delete document: ${errorMessage}`);
         }
     }
 
 
-    async getDocumentInfo(fileId: string): Promise<any> {
-        try {
-            const documentFile = await mg.DocumentFile.findOne({ file_id: fileId }).lean();
-            const embeddings = await mg.DocumentEmbedding.find({ file_id: fileId }).lean();
-
-            return {
-                ids: embeddings.map(e => e.chunk_id),
-                metadatas: embeddings.map(e => e.metadata),
-                documents: embeddings.map(e => e.content),
-                file_info: documentFile
-            };
-        } catch (error: any) {
-            console.error('Error getting document info:', error);
-            throw new Error(`Failed to get document info: ${error.message}`);
-        }
-    }
-
-
-    async getAllFiles(): Promise<any[]> {
+    async getAllFiles(): Promise<TFileMetadata[]> {
         try {
             const files = await mg.DocumentFile.find({})
                 .sort({ upload_date: -1 })
@@ -396,14 +401,15 @@ export class DocumentEmbeddingsMongoDBService {
                 chunk_count: file.chunk_count,
                 processing_status: file.processing_status
             }));
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             console.error('Error getting all files:', error);
-            throw new Error(`Failed to get files: ${error.message}`);
+            throw new Error(`Failed to get files: ${errorMessage}`);
         }
     }
 
 
-    async searchInMultipleFiles(fileIds: string[], query: string, maxResults: number = 5): Promise<any[]> {
+    async searchInMultipleFiles(fileIds: string[], query: string, maxResults: number = 5): Promise<TSearchResults> {
         try {
             const queryEmbedding = await getEmbedding(query);
 
@@ -440,99 +446,15 @@ export class DocumentEmbeddingsMongoDBService {
             ];
 
             const results = await mg.DocumentEmbedding.aggregate(pipeline).exec();
-            // console.log('Results:', results);
-            return [results.map(r => r.content)];
-
-            // const fileEmbeddings = await mg.DocumentEmbedding.find({
-            //     file_id: { $in: fileIds }
-            // }).lean();
-
-            // const similarities = fileEmbeddings.map(doc => ({
-            //     ...doc,
-            //     similarity: this.cosineSimilarity(queryEmbedding, doc.embedding)
-            // }));
-
-            // const results = similarities
-            //     .sort((a, b) => b.similarity - a.similarity)
-            //     .slice(0, maxResults)
-            //     .map(doc => doc.content);
-
-            // return [results];
-        } catch (error: any) {
+            return [results.map((r: { content: string }) => r.content)];
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             console.error('Error searching in multiple files:', error);
-            throw new Error(`Search in files failed: ${error.message}`);
+            throw new Error(`Search in files failed: ${errorMessage}`);
         }
     }
 
 
-
-    async getFileContent(fileId: string): Promise<any> {
-        try {
-            const fileInfo = await mg.DocumentFile.findOne({ file_id: fileId }).lean();
-            if (!fileInfo) {
-                throw new Error('File not found');
-            }
-
-            const chunks = await mg.DocumentEmbedding.find({ file_id: fileId })
-                .sort({ 'metadata.chunk_index': 1 })
-                .lean();
-
-            if (chunks.length === 0) {
-                throw new Error('File content not found');
-            }
-
-            return {
-                file_id: fileId,
-                file_info: fileInfo,
-                chunks: chunks.map(chunk => ({
-                    content: chunk.content,
-                    metadata: chunk.metadata,
-                    id: chunk.chunk_id
-                })),
-                total_chunks: chunks.length,
-                reconstructed_text: chunks.map(chunk => chunk.content).join(' ')
-            };
-        } catch (error: any) {
-            console.error('Error getting file content:', error);
-            throw new Error(`Failed to get file content: ${error.message}`);
-        }
-    }
-
-
-    async getFileStats(): Promise<any> {
-        try {
-            const totalFiles = await mg.DocumentFile.countDocuments({});
-            const totalChunks = await mg.DocumentEmbedding.countDocuments({});
-
-            const fileTypeStats = await mg.DocumentFile.aggregate([
-                {
-                    $group: {
-                        _id: '$file_type',
-                        count: { $sum: 1 },
-                        totalSize: { $sum: '$file_size' }
-                    }
-                }
-            ]);
-
-            const fileTypes: Record<string, number> = {};
-            let totalSize = 0;
-
-            fileTypeStats.forEach(stat => {
-                fileTypes[stat._id] = stat.count;
-                totalSize += stat.totalSize;
-            });
-
-            return {
-                total_files: totalFiles,
-                total_chunks: totalChunks,
-                file_types: fileTypes,
-                storage_size: totalSize
-            };
-        } catch (error: any) {
-            console.error('Error getting file stats:', error);
-            throw new Error(`Failed to get file stats: ${error.message}`);
-        }
-    }
 }
 
 

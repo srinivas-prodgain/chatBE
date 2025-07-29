@@ -19,7 +19,28 @@ const conversationSchema = new Schema<TConversation>({
     type: String,
     required: false,
     index: true
-  }
+  },
+  summary: {
+    type: String,
+    required: false,
+    default: "",
+  },
+  summaryVersion: {
+    type: Number,
+    required: false,
+    default: 0,
+  },
+  lastSummarizedMessageIndex: {
+    type: Number,
+    default: 0,
+    required: false,
+  },
+  lastTokenCount: {
+    type: Number,
+    default: 0,
+    required: false,
+  },
+
 }, {
   timestamps: true
 });

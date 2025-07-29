@@ -10,6 +10,9 @@ import { LanguageModel, Message, streamText } from 'ai';
 import { qr_code_tool } from '../../lib/tools/qr-code-tool';
 import { documentEmbeddingsMongoDBService } from '../../lib/document-embeddings-mongodb-service';
 import { analyzeQuery } from '../../lib/query-analyzer';
+import { hybrid_memory_manager } from '../../lib/hybrid-memory-manager';
+import { generate_system_prompt } from '../../lib/system-prompts';
+import { Types } from 'mongoose';
 
 export const stream_chat_messages = async (req: Request, res: Response) => {
     const { uid } = z_stream_chat_messages_req_params.parse(req.params);
@@ -35,30 +38,6 @@ export const stream_chat_messages = async (req: Request, res: Response) => {
         });
         await aiMessage.save();
         await mg.Conversation.findByIdAndUpdate(conversation?._id, { updatedAt: new Date() });
-    }
-
-    async function getConversationMessages(conversationId: string): Promise<Message[]> {
-        try {
-            console.log('📨 Fetching conversation messages from database...');
-
-            const chatMessages = await mg.ChatMessage
-                .find({ conversationId })
-                .sort({ createdAt: 1 }) // Sort by creation time, oldest first
-                .lean();
-
-            console.log(`📬 Retrieved ${chatMessages.length} messages from conversation`);
-
-            const messages: Message[] = chatMessages.map((msg, index) => ({
-                id: msg._id?.toString() || `msg-${index}`,
-                role: msg.sender === 'user' ? 'user' as const : 'assistant' as const,
-                content: msg.message
-            }));
-
-            return messages;
-        } catch (error: any) {
-            console.error('❌ Error fetching conversation messages:', error.message);
-            return [];
-        }
     }
 
     async function searchRelevantDocuments(query: string, fileIds?: string[]): Promise<string> {
@@ -174,58 +153,33 @@ export const stream_chat_messages = async (req: Request, res: Response) => {
             relevantContext = await searchRelevantDocuments(latestUserMessage, selectedFileIds);
         }
 
-        let systemContent = `You are a helpful AI assistant with access to tools. You can:
-          
-          **Generate QR codes** using generateQRCode tool to create QR codes for any data
-          
-          Use generateQRCode when users ask about:
-          - Creating QR codes for websites, URLs, text, contact info, etc.
-          - "Generate QR code for..." or "Create QR code for..."
-          - Converting text/URLs to QR codes
-          - QR code generation in different formats (PNG, SVG, data URL)
-          
-          Current conversation ID: ${conversation?._id}`;
+        const { summary, messagesToSend } = await hybrid_memory_manager({ conversationId: conversation?._id as Types.ObjectId });
 
-        // Add document context if found
-        if (relevantContext.trim()) {
-            const contextSource = selectedFileIds && selectedFileIds.length > 0
-                ? `from ${selectedFileIds.length} selected file(s)`
-                : 'from uploaded documents';
 
-            systemContent += `\n\n**📚 DOCUMENT CONTEXT AVAILABLE:**
+        // Generate system prompt using the new system prompts function
+        const { system_content: systemContent } = generate_system_prompt({
+            conversation_id: conversation?._id?.toString() || '',
+            relevant_context: relevantContext,
+            selected_file_ids: selectedFileIds,
+            include_qr_tools: true,
+            summary: summary
+        });
 
-I have access to relevant information ${contextSource} that may help answer your question. Here is the context:
-
----DOCUMENT CONTEXT START---
-${relevantContext}
----DOCUMENT CONTEXT END---
-
-**Instructions for using this context:**
-- Use this information to provide accurate, detailed responses
-- When referencing information from the documents, you can mention "Based on the uploaded documents..." or "According to the provided information..."
-- If the user's question is directly answered by the context, prioritize that information
-- If the context is not relevant to the user's question, you can ignore it and respond normally
-- Combine the document context with your general knowledge when appropriate`;
-        } else {
+        if (!relevantContext.trim()) {
             console.log('💬 No document context found - proceeding with general knowledge only');
         }
-
-        console.log("System content:", systemContent);
 
         const systemMessage: Message = {
             id: 'system-message',
             role: 'system',
             content: systemContent
         };
+        // console.log('🔍 System message:', systemMessage);
 
-        // Fetch conversation history from database
-        const conversationMessages = await getConversationMessages(conversation?._id?.toString() || '');
-
-        console.log(`💬 Using ${conversationMessages.length} messages from conversation history`);
 
         const result = streamText({
             model: model,
-            messages: [systemMessage, ...conversationMessages],
+            messages: [systemMessage, ...messagesToSend],
             abortSignal: abortController.signal,
             tools: {
                 qr_code_tool,
