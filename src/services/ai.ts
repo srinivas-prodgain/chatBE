@@ -21,14 +21,14 @@ export const mistralModel = mistral('mistral-large-latest');
 const client = new VoyageAIClient({ apiKey: process.env.VOYAGE_API_KEY! });
 
 // Function to generate embeddings using the Voyage AI API
-export async function getEmbedding(text: string) {
+export const get_embedding = async ({ text }: { text: string }): Promise<number[] | undefined> => {
     const results = await client.embed({
         input: text,
         model: "voyage-3-large",
         outputDimension: 1024  // Match existing MongoDB vector index
     });
     return results?.data?.[0]?.embedding;
-}
+};
 
 // For testing fallback: you can temporarily set OPENAI_API_KEY to invalid value
 // or use the commented line in chatRoutes.ts to force an error

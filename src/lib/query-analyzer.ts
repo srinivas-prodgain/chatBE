@@ -1,4 +1,4 @@
-import { mistralModel } from './ai';
+import { mistralModel } from '../services/ai';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 

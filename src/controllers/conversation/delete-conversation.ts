@@ -4,13 +4,13 @@ import { z } from 'zod';
 import { mg } from '../../config/mg';
 import { throw_error } from '../../utils/throw-error';
 
-export const delete_conversation = async (req: Request, res: Response) => {
+export const delete_conversation = async ({ req, res }: { req: Request, res: Response }) => {
     const { id } = z_delete_conversation_req_params.parse(req.params);
 
     const conversation = await mg.Conversation.findById(id);
 
     if (!conversation) {
-        throw_error('Conversation not found', 404);
+        throw_error({ message: 'Conversation not found', status_code: 404 });
     }
 
     // Delete all messages associated with this conversation

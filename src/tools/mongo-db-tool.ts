@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { tool } from 'ai';
 
-import { ChatMessage } from '../../models/chat';
+import { ChatMessage } from '../models/chat';
 
 
 

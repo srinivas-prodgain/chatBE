@@ -66,3 +66,13 @@ export type TPaginationResponse = {
     total_pages: number;
     total_items: number;
 }; 
+
+
+export type TToolStatus = {
+    tool: string;
+    status: 'started' | 'completed';
+    details?: {
+        resultCount?: number ;
+        error?: string;
+    };
+};

@@ -20,6 +20,7 @@
     "@ai-sdk/openai": "^1.3.23",
     "@chroma-core/default-embed": "^0.1.8",
     "@dqbd/tiktoken": "^1.0.21",
+    "@tavily/core": "^0.5.10",
     "@types/multer": "^2.0.0",
     "ai": "^4.3.17",
     "chromadb": "^3.0.9",

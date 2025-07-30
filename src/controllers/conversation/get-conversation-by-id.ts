@@ -4,14 +4,14 @@ import { z } from 'zod';
 import { mg } from '../../config/mg';
 import { throw_error } from '../../utils/throw-error';
 
-export const get_conversation_by_id = async (req: Request, res: Response) => {
+export const get_conversation_by_id = async ({ req, res }: { req: Request, res: Response }) => {
     const { uid } = z_get_conversation_by_id_req_params.parse(req.params);
 
     // Find conversation by uid
     const conversation = await mg.Conversation.findOne({ uid });
 
     if (!conversation) {
-        throw_error('Conversation not found', 404);
+        throw_error({ message: 'Conversation not found', status_code: 404 });
         return; // This line helps TypeScript understand that conversation is not null below
     }
 

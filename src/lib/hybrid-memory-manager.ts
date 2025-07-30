@@ -1,10 +1,18 @@
 import { generateText, Message } from "ai";
 import { mg } from "../config/mg";
 import { TMessage } from "../types/message";
-import { mistralModel } from "./ai";
+import { mistralModel } from "../services/ai";
 import { encoding_for_model, TiktokenModel, Tiktoken } from '@dqbd/tiktoken';
 import { Types } from "mongoose";
 import { generate_initial_summary_prompt, generate_update_summary_prompt } from "./system-prompts";
+import {
+    INITIAL_SUMMARY_TRIGGER,
+    SUMMARY_UPDATE_TRIGGER,
+    TOKEN_OVERHEAD_PER_MESSAGE,
+    FALLBACK_CHARS_PER_TOKEN,
+    SUMMARY_TEMPERATURE,
+    SUMMARY_MAX_TOKENS
+} from "../constants/memory-manager";
 
 type TConversationUpdate = {
     summary?: string;
@@ -12,10 +20,6 @@ type TConversationUpdate = {
     lastSummarizedMessageIndex?: number;
     lastTokenCount?: number;
 };
-
-// Correct thresholds as per original specification
-const INITIAL_SUMMARY_TRIGGER = 2000; // Tokens to create the first summary
-const SUMMARY_UPDATE_TRIGGER = 1000; // Tokens to update summary after the first
 
 let encoder: Tiktoken | null = null;
 
@@ -33,7 +37,7 @@ const cleanup_encoder = (): void => {
     }
 };
 
-const count_tokens = (messages: TMessage[]): number => {
+const count_tokens = ({ messages }: { messages: TMessage[] }): number => {
     try {
         const tokenizer = get_encoder();
         let total_tokens = 0;
@@ -42,20 +46,20 @@ const count_tokens = (messages: TMessage[]): number => {
             const tokens = tokenizer.encode(message.message);
             total_tokens += tokens.length;
             // Add a small overhead for message metadata (role, timestamps, etc.)
-            total_tokens += 10;
+            total_tokens += TOKEN_OVERHEAD_PER_MESSAGE;
         }
 
         return total_tokens;
     } catch (error) {
         console.error('Error counting tokens:', error);
         // Fallback: approximate 4 chars per token
-        return Math.ceil(messages.reduce((total, msg) => total + msg.message.length, 0) / 4);
+        return Math.ceil(messages.reduce((total, msg) => total + msg.message.length, 0) / FALLBACK_CHARS_PER_TOKEN);
     }
 };
 
-const generate_summary = async (messages: TMessage[]): Promise<string> => {
+const generate_summary = async ({ messages }: { messages: TMessage[] }): Promise<string> => {
     console.log('🔍 Generating summary for messages:', messages.length);
-    const prompt = generate_initial_summary_prompt(messages.map(m => `${m.sender}: ${m.message}\n`));
+    const prompt = generate_initial_summary_prompt({ messages: messages.map(m => `${m.sender}: ${m.message}\n`) });
     if (messages.length === 0) {
         return "Empty conversation.";
     }
@@ -64,8 +68,8 @@ const generate_summary = async (messages: TMessage[]): Promise<string> => {
         const summary = await generateText({
             model: mistralModel,
             prompt: prompt,
-            temperature: 0.1,
-            maxTokens: 800
+            temperature: SUMMARY_TEMPERATURE,
+            maxTokens: SUMMARY_MAX_TOKENS
         });
         return summary.text;
     } catch (error) {
@@ -74,19 +78,19 @@ const generate_summary = async (messages: TMessage[]): Promise<string> => {
     }
 };
 
-const generate_summary_updated = async (messages: TMessage[], prev_summary: string): Promise<string> => {
+const generate_summary_updated = async ({ messages, prev_summary }: { messages: TMessage[], prev_summary: string }): Promise<string> => {
     if (messages.length === 0) {
         return prev_summary;
     }
 
-    const prompt = generate_update_summary_prompt(messages.map(m => `${m.sender}: ${m.message}\n`), prev_summary);
+    const prompt = generate_update_summary_prompt({ messages: messages.map(m => `${m.sender}: ${m.message}\n`), previous_summary: prev_summary });
 
     try {
         const summary = await generateText({
             model: mistralModel,
             prompt: prompt,
-            temperature: 0.1,
-            maxTokens: 800
+            temperature: SUMMARY_TEMPERATURE,
+            maxTokens: SUMMARY_MAX_TOKENS
         });
         return summary.text;
     } catch (error) {
@@ -121,7 +125,7 @@ export const hybrid_memory_manager = async ({ conversationId }: { conversationId
             messages_to_analyze = messages.slice(prev_last_summarized_index + 1, -1);
         }
 
-        const tokens_to_analyze = count_tokens(messages_to_analyze);
+        const tokens_to_analyze = count_tokens({ messages: messages_to_analyze });
 
         console.log(`🔍 Tokens to analyze: ${tokens_to_analyze}`);
         console.log(`🔍 Messages to analyze: ${messages_to_analyze.length}`);
@@ -134,7 +138,7 @@ export const hybrid_memory_manager = async ({ conversationId }: { conversationId
         if (prev_summary_version === 0) {
             if (tokens_to_analyze >= INITIAL_SUMMARY_TRIGGER) {
                 console.log(`🔄 Creating initial summary. Total tokens: ${tokens_to_analyze}`);
-                summary = await generate_summary(messages_to_analyze);
+                summary = await generate_summary({ messages: messages_to_analyze });
                 messages_to_send = messages.slice(-1);
 
                 should_update_db = true;
@@ -162,7 +166,7 @@ export const hybrid_memory_manager = async ({ conversationId }: { conversationId
             if (tokens_to_analyze >= SUMMARY_UPDATE_TRIGGER) {
                 console.log(`🔄 Updating summary. New tokens: ${tokens_to_analyze}`);
 
-                summary = await generate_summary_updated(messages_to_analyze, prev_summary);
+                summary = await generate_summary_updated({ messages: messages_to_analyze, prev_summary });
                 messages_to_send = messages.slice(-1);
 
                 should_update_db = true;

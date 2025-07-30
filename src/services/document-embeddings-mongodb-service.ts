@@ -7,7 +7,23 @@ import mammoth from 'mammoth';
 import MarkdownIt from 'markdown-it';
 
 import { mg } from '../config/mg';
-import { getEmbedding } from './ai';
+import { get_embedding } from './ai';
+import {
+    DEFAULT_CHUNK_SIZE,
+    DEFAULT_OVERLAP_SIZE,
+    MIN_CHUNK_THRESHOLD,
+    EMBEDDING_RATE_LIMIT_DELAY,
+    EMBEDDING_PROGRESS_BASE,
+    EMBEDDING_PROGRESS_RANGE,
+    DEFAULT_SEARCH_RESULTS,
+    SEARCH_SIMILARITY_THRESHOLD,
+    VECTOR_INDEX_NAME,
+    SPECIFIC_DOCUMENT_INDEX_NAME,
+    VECTOR_DIMENSION,
+    PROCESSING_DELAY_SHORT,
+    PROCESSING_DELAY_MEDIUM,
+    PROCESSING_DELAY_LONG
+} from '../constants/document-processing';
 
 export type TDocumentMetadata = {
     file_id: string;
@@ -64,20 +80,26 @@ export class DocumentEmbeddingsMongoDBService {
     }
 
 
-    async processAndStoreDocument(
+    async processAndStoreDocument({
+        filePath,
+        fileName,
+        fileSize,
+        mimeType,
+        progressCallback
+    }: {
         filePath: string,
         fileName: string,
         fileSize: number,
         mimeType: string,
         progressCallback?: (progress: number, message: string) => void
-    ): Promise<TProcessedDocument> {
+    }): Promise<TProcessedDocument> {
 
         const fileId = crypto.randomUUID();
 
         try {
             // Initial setup
             progressCallback?.(5, 'Initializing file processing...');
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_SHORT));
 
             // Create document file record
             const documentFile = new mg.DocumentFile({
@@ -93,7 +115,7 @@ export class DocumentEmbeddingsMongoDBService {
 
             // Extract text from file
             progressCallback?.(10, 'Reading file contents...');
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_MEDIUM));
 
             progressCallback?.(25, `Extracting text from ${path.extname(fileName).toUpperCase()} file...`);
             const extractedText = await this.extractTextFromFile(filePath, mimeType);
@@ -104,11 +126,11 @@ export class DocumentEmbeddingsMongoDBService {
             }
 
             progressCallback?.(40, `Extracted ${extractedText.length} characters of text`);
-            await new Promise(resolve => setTimeout(resolve, 300));
+            await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_LONG));
 
             // Chunk the text
             progressCallback?.(50, 'Analyzing text structure...');
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_MEDIUM));
 
             progressCallback?.(60, 'Creating optimized text chunks...');
             const textChunks = this.chunkText(extractedText);
@@ -120,7 +142,7 @@ export class DocumentEmbeddingsMongoDBService {
             }
 
             progressCallback?.(70, `Created ${textChunks.length} text chunks for processing`);
-            await new Promise(resolve => setTimeout(resolve, 300));
+            await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_LONG));
 
             // Prepare data
             progressCallback?.(75, 'Preparing vector embeddings data...');
@@ -138,7 +160,7 @@ export class DocumentEmbeddingsMongoDBService {
                 }
             }));
 
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_MEDIUM));
 
             // Generate embeddings and store in MongoDB
             progressCallback?.(85, 'Generating vector embeddings with VoyageAI...');
@@ -217,95 +239,83 @@ export class DocumentEmbeddingsMongoDBService {
     }
 
 
-    private chunkText(text: string, maxChunkSize: number = 1000, overlapSize: number = 200): string[] {
-        // Clean up the text
+    private chunkText(text: string, maxChunkSize: number = DEFAULT_CHUNK_SIZE, overlapSize: number = DEFAULT_OVERLAP_SIZE): string[] {
+        const chunks: string[] = [];
         const cleanText = text.replace(/\s+/g, ' ').trim();
 
         if (cleanText.length <= maxChunkSize) {
             return [cleanText];
         }
 
-        const chunks: string[] = [];
         let startIndex = 0;
 
         while (startIndex < cleanText.length) {
             let endIndex = startIndex + maxChunkSize;
 
-            // If we're not at the end, try to break at a sentence or word boundary
-            if (endIndex < cleanText.length) {
-                // Look for sentence endings first
-                const sentenceEnd = cleanText.lastIndexOf('.', endIndex);
-                const questionEnd = cleanText.lastIndexOf('?', endIndex);
-                const exclamationEnd = cleanText.lastIndexOf('!', endIndex);
+            if (endIndex >= cleanText.length) {
+                endIndex = cleanText.length;
+            } else {
+                // Try to break at sentence boundaries
+                const lastSentenceEnd = cleanText.lastIndexOf('.', endIndex);
+                const lastExclamation = cleanText.lastIndexOf('!', endIndex);
+                const lastQuestion = cleanText.lastIndexOf('?', endIndex);
+                const bestSentenceEnd = Math.max(lastSentenceEnd, lastExclamation, lastQuestion);
 
-                const bestSentenceEnd = Math.max(sentenceEnd, questionEnd, exclamationEnd);
-
-                if (bestSentenceEnd > startIndex + maxChunkSize * 0.5) {
+                if (bestSentenceEnd > startIndex + maxChunkSize * MIN_CHUNK_THRESHOLD) {
                     endIndex = bestSentenceEnd + 1;
                 } else {
-                    // Fall back to word boundary
+                    // Fallback to word boundaries
                     const wordEnd = cleanText.lastIndexOf(' ', endIndex);
-                    if (wordEnd > startIndex + maxChunkSize * 0.5) {
+                    if (wordEnd > startIndex + maxChunkSize * MIN_CHUNK_THRESHOLD) {
                         endIndex = wordEnd;
                     }
                 }
             }
 
-            const chunk = cleanText.slice(startIndex, endIndex).trim();
-            if (chunk.length > 0) {
-                chunks.push(chunk);
-            }
+            chunks.push(cleanText.substring(startIndex, endIndex).trim());
 
-            // Move start index with overlap
+            // Move to next chunk with overlap
             startIndex = Math.max(startIndex + 1, endIndex - overlapSize);
         }
 
-        return chunks;
+        return chunks.filter(chunk => chunk.length > 0);
     }
 
 
     private async storeInMongoDB(chunks: TDocumentChunk[], progressCallback?: (progress: number, message: string) => void): Promise<void> {
         try {
-            console.log(`Processing ${chunks.length} chunks with 3 RPM rate limit (20 seconds between requests)`);
+            console.log(`Processing ${chunks.length} chunks with 3 RPM rate limit (${EMBEDDING_RATE_LIMIT_DELAY} seconds between requests)`);
 
             for (let i = 0; i < chunks.length; i++) {
                 const chunk = chunks[i];
 
                 // Calculate progress from 85% to 95% (embeddings portion of overall upload)
-                const progress = 85 + Math.floor((i / chunks.length) * 10);
-
+                const progress = EMBEDDING_PROGRESS_BASE + Math.floor((i / chunks.length) * EMBEDDING_PROGRESS_RANGE);
                 progressCallback?.(progress, `Generating embedding for chunk ${i + 1}/${chunks.length}...`);
 
                 // Generate embedding for this single chunk
-                const embedding = await getEmbedding(chunk.content);
+                const embedding = await get_embedding({ text: chunk.content });
 
                 if (!embedding) {
-                    throw new Error(`Failed to generate embedding for chunk ${i + 1}`);
+                    console.warn(`Failed to generate embedding for chunk ${i + 1}/${chunks.length}`);
+                    continue;
                 }
 
-                // Create document for MongoDB
+                // Prepare document to insert
                 const documentToInsert = {
                     file_id: chunk.metadata.file_id,
                     chunk_id: chunk.id,
                     content: chunk.content,
-                    embedding: embedding,
-                    metadata: {
-                        ...chunk.metadata,
-                        upload_date: new Date(chunk.metadata.upload_date)
-                    }
+                    metadata: chunk.metadata,
+                    embedding: embedding
                 };
 
-                // Insert into MongoDB
                 await mg.DocumentEmbedding.create(documentToInsert);
 
-                console.log(`✅ Processed chunk ${i + 1}/${chunks.length}`);
-
-                progressCallback?.(progress + 1, `Saved chunk ${i + 1}/${chunks.length} to database`);
-
-                // Wait 20 seconds between requests (except for the last chunk)
+                // Rate limiting: Wait between requests (except for the last chunk)
                 if (i < chunks.length - 1) {
                     // Show countdown during wait time
-                    for (let countdown = 20; countdown > 0; countdown--) {
+                    for (let countdown = EMBEDDING_RATE_LIMIT_DELAY; countdown > 0; countdown--) {
                         progressCallback?.(progress, `Rate limit wait: ${countdown}s remaining... (${chunks.length - i - 1} chunks left)`);
                         await new Promise(resolve => setTimeout(resolve, 1000));
                     }
@@ -320,10 +330,10 @@ export class DocumentEmbeddingsMongoDBService {
         }
     }
 
-    async searchSimilarDocuments(query: string, maxResults: number = 5): Promise<TSearchResults> {
+    async searchSimilarDocuments({ query, maxResults = DEFAULT_SEARCH_RESULTS }: { query: string, maxResults?: number }): Promise<TSearchResults> {
         try {
             // Generate embedding for the search query
-            const queryEmbedding = await getEmbedding(query);
+            const queryEmbedding = await get_embedding({ text: query });
 
             if (!queryEmbedding) {
                 throw new Error('Failed to generate embedding for search query');
@@ -332,7 +342,7 @@ export class DocumentEmbeddingsMongoDBService {
             const pipeline = [
                 {
                     $vectorSearch: {
-                        index: "document_vector_index",
+                        index: VECTOR_INDEX_NAME,
                         path: "embedding",
                         queryVector: queryEmbedding,
                         numCandidates: maxResults * 10,
@@ -348,7 +358,7 @@ export class DocumentEmbeddingsMongoDBService {
                 },
                 {
                     $match: {
-                        similarity: { $gt: 0.7 }
+                        similarity: { $gt: SEARCH_SIMILARITY_THRESHOLD }
                     }
                 }
             ];
@@ -369,19 +379,19 @@ export class DocumentEmbeddingsMongoDBService {
     }
 
 
-    async deleteDocument(fileId: string): Promise<void> {
+    async deleteDocument({ fileId }: { fileId: string }): Promise<void> {
         try {
             // Delete all embeddings for this file
             const deleteResult = await mg.DocumentEmbedding.deleteMany({ file_id: fileId });
+            console.log(`Deleted ${deleteResult.deletedCount} embeddings for file ${fileId}`);
 
-            // Delete the document file record
+            // Delete the file record
             await mg.DocumentFile.deleteOne({ file_id: fileId });
-
-            console.log(`Deleted ${deleteResult.deletedCount} chunks for file ${fileId}`);
+            console.log(`Deleted file record for ${fileId}`);
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             console.error('Error deleting document:', error);
-            throw new Error(`Failed to delete document: ${errorMessage}`);
+            throw new Error(`Delete failed: ${errorMessage}`);
         }
     }
 
@@ -409,19 +419,18 @@ export class DocumentEmbeddingsMongoDBService {
     }
 
 
-    async searchInMultipleFiles(fileIds: string[], query: string, maxResults: number = 5): Promise<TSearchResults> {
+    async searchInMultipleFiles({ fileIds, query, maxResults = DEFAULT_SEARCH_RESULTS }: { fileIds: string[], query: string, maxResults?: number }): Promise<TSearchResults> {
         try {
-            const queryEmbedding = await getEmbedding(query);
+            const queryEmbedding = await get_embedding({ text: query });
 
             if (!queryEmbedding) {
                 throw new Error('Failed to generate embedding for search query');
             }
 
-
             const pipeline = [
                 {
                     $vectorSearch: {
-                        index: "specific_document_vector_search",
+                        index: SPECIFIC_DOCUMENT_INDEX_NAME,
                         path: "embedding",
                         queryVector: queryEmbedding,
                         numCandidates: maxResults * 10,
@@ -440,17 +449,19 @@ export class DocumentEmbeddingsMongoDBService {
                 },
                 {
                     $match: {
-                        similarity: { $gt: 0.7 }
+                        similarity: { $gt: SEARCH_SIMILARITY_THRESHOLD }
                     }
                 }
             ];
 
             const results = await mg.DocumentEmbedding.aggregate(pipeline).exec();
+
             return [results.map((r: { content: string }) => r.content)];
+
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             console.error('Error searching in multiple files:', error);
-            throw new Error(`Search in files failed: ${errorMessage}`);
+            throw new Error(`Multi-file search failed: ${errorMessage}`);
         }
     }
 

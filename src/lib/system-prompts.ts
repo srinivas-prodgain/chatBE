@@ -3,6 +3,8 @@ type TSystemPromptArgs = {
     relevant_context?: string;
     selected_file_ids?: string[];
     include_qr_tools?: boolean;
+    include_web_search_tools?: boolean;
+    include_time_tools?: boolean;
     custom_instructions?: string;
     summary?: string;
 };
@@ -17,6 +19,8 @@ export const generate_system_prompt = ({
     relevant_context,
     selected_file_ids,
     include_qr_tools = true,
+    include_web_search_tools = true,
+    include_time_tools = true,
     custom_instructions,
     summary
 }: TSystemPromptArgs): TSystemPromptResponse => {
@@ -29,13 +33,48 @@ export const generate_system_prompt = ({
           
 **Generate QR codes** using generateQRCode tool to create QR codes for any data
 
+
 Use generateQRCode when users ask about:
 - Creating QR codes for websites, URLs, text, contact info, etc.
 - "Generate QR code for..." or "Create QR code for..."
 - Converting text/URLs to QR codes
-- QR code generation in different formats (PNG, SVG, data URL)`;
+- QR code generation in different formats (PNG, SVG, data URL)
+
+`;
     } else {
         system_content += `.`;
+    }
+
+    if (include_time_tools) {
+        system_content += `
+**Get current date and time** using time_tool to get the current date and time in different formats.
+
+Use time_tool when users ask about:
+- Current date and time
+- Time in different timezones
+- Time-related calculations
+
+        `;
+    }
+
+    if (include_web_search_tools) {
+        system_content += ` You can:
+      
+    **Search the web** using webSearch tool for current information, news, facts, and real-time data
+    
+    Use webSearch when users ask about:
+    - Current events, news, or recent developments
+    - Real-time information (stock prices, weather, etc.)
+    - Facts that might have changed recently
+    - Information not in your training data
+    - "What's happening with..." or "Latest news about..."
+    - Any query needing up-to-date information
+    - **When you don't have sufficient knowledge about a topic or need more detailed/specific information**
+    - **Anytime you think additional research would provide a better, more complete answer**
+    
+    **Important:** If you believe you lack adequate information to fully answer a user's question, or if you think web search would significantly improve your response, you should proactively use the webSearch tool to gather the necessary details.
+    
+    `;
     }
 
     if (summary?.trim()) {
@@ -81,7 +120,7 @@ ${relevant_context}
     };
 };
 
-export const generate_update_summary_prompt = (messages: string[], previous_summary?: string): string => {
+export const generate_update_summary_prompt = ({ messages, previous_summary }: { messages: string[], previous_summary?: string }): string => {
     const UPDATE_SUMMARY_PROMPT = `You are an expert conversation analyst specializing in incremental summary updates. Your task is to intelligently merge new conversation content with an existing summary while maintaining accuracy and coherence.
 
 ## CRITICAL REQUIREMENTS:
@@ -151,7 +190,7 @@ Generate an updated summary that represents the complete conversation history ac
     return UPDATE_SUMMARY_PROMPT;
 };
 
-export const generate_initial_summary_prompt = (messages: string[]): string => {
+export const generate_initial_summary_prompt = ({ messages }: { messages: string[] }): string => {
 
     const INITIAL_SUMMARY_PROMPT = `You are an expert conversation analyst and summarization specialist. Your task is to create a comprehensive yet concise summary of a conversation that will serve as long-term memory for an AI assistant.
 
@@ -212,7 +251,7 @@ Generate a summary that would allow an AI assistant to seamlessly continue this 
     return INITIAL_SUMMARY_PROMPT;
 }
 
-export const generate_query_analysis_prompt = (query: string): string => {
+export const generate_query_analysis_prompt = ({ query }: { query: string }): string => {
     return `Analyze this user query to determine if it requires searching through uploaded documents/files.
 
 User Query: "${query}"

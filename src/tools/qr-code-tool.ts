@@ -15,7 +15,6 @@ export const qr_code_tool = tool({
 
     execute: async ({ data, size = 200, format = 'dataurl', errorLevel = 'M' }) => {
 
-
         console.log('🔧 TOOL CALLED: generateQRCode');
         console.log('📋 Parameters:', { data, size, format, errorLevel });
         console.log('⏰ Timestamp:', new Date().toISOString());

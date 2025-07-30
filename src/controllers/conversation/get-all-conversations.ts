@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { mg } from '../../config/mg';
 
-export const get_all_conversations = async (req: Request, res: Response) => {
+export const get_all_conversations = async ({ req, res }: { req: Request, res: Response }) => {
     const { page, limit } = z_get_all_conversations_req_query.parse(req.query);
     const { userId } = z_get_all_conversations_req_params.parse(req.params);
 

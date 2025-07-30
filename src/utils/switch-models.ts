@@ -1,5 +1,5 @@
 import { LanguageModel } from "ai";
-import { mistralModel, openaiModel } from "../lib/ai";
+import { mistralModel, openaiModel } from "../services/ai";
 
 
 export const switch_models = (model: string): LanguageModel => {
