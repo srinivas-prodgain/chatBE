@@ -43,7 +43,7 @@ export const mongo_db_tool = tool({
                 messages: messages.map(message => ({
                     role: message.sender === 'user' ? 'user' : 'assistant',
                     content: message.message,
-                    createdAt: message.timestamp,
+                    createdAt: message.created_at,
                 })),
                 count: messages.length,
             };

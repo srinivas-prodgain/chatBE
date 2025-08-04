@@ -1,7 +1,7 @@
 import { generateText, Message } from "ai";
 import { mg } from "../config/mg";
 import { TMessage } from "../types/message";
-import { mistralModel } from "../services/ai";
+import { mistral_model } from "../services/ai";
 import { encoding_for_model, TiktokenModel, Tiktoken } from '@dqbd/tiktoken';
 import { Types } from "mongoose";
 import { generate_initial_summary_prompt, generate_update_summary_prompt } from "./system-prompts";
@@ -14,16 +14,38 @@ import {
     SUMMARY_MAX_TOKENS
 } from "../constants/memory-manager";
 
+// Function parameter types
+type TGetEncoderArgs = {
+    model?: TiktokenModel;
+};
+
+type TCountTokensArgs = {
+    messages: TMessage[];
+};
+
+type TGenerateSummaryArgs = {
+    messages: TMessage[];
+};
+
+type TGenerateSummaryUpdatedArgs = {
+    messages: TMessage[];
+    prev_summary: string;
+};
+
+type THybridMemoryManagerArgs = {
+    conversation_id: Types.ObjectId;
+};
+
 type TConversationUpdate = {
     summary?: string;
-    summaryVersion?: number;
-    lastSummarizedMessageIndex?: number;
-    lastTokenCount?: number;
+    summary_version?: number;
+    last_summarized_message_index?: number;
+    last_token_count?: number;
 };
 
 let encoder: Tiktoken | null = null;
 
-const get_encoder = (model: TiktokenModel = 'gpt-4o'): Tiktoken => {
+const get_encoder = ({ model = 'gpt-4o' }: TGetEncoderArgs = {}): Tiktoken => {
     if (!encoder) {
         encoder = encoding_for_model(model);
     }
@@ -37,36 +59,32 @@ const cleanup_encoder = (): void => {
     }
 };
 
-const count_tokens = ({ messages }: { messages: TMessage[] }): number => {
+const count_tokens = ({ messages }: TCountTokensArgs): number => {
     try {
-        const tokenizer = get_encoder();
+        const enc = get_encoder({});
         let total_tokens = 0;
 
-        for (const message of messages) {
-            const tokens = tokenizer.encode(message.message);
-            total_tokens += tokens.length;
-            // Add a small overhead for message metadata (role, timestamps, etc.)
-            total_tokens += TOKEN_OVERHEAD_PER_MESSAGE;
+        for (const msg of messages) {
+            total_tokens += enc.encode(msg.message).length + TOKEN_OVERHEAD_PER_MESSAGE;
         }
 
         return total_tokens;
     } catch (error) {
-        console.error('Error counting tokens:', error);
-        // Fallback: approximate 4 chars per token
-        return Math.ceil(messages.reduce((total, msg) => total + msg.message.length, 0) / FALLBACK_CHARS_PER_TOKEN);
+        console.warn('Token counting failed, using character estimation:', error);
+        // Fallback: estimate tokens from characters
+        const total_chars = messages.reduce((sum, msg) => sum + msg.message.length, 0);
+        return Math.ceil(total_chars / FALLBACK_CHARS_PER_TOKEN);
+    } finally {
+        cleanup_encoder();
     }
 };
 
-const generate_summary = async ({ messages }: { messages: TMessage[] }): Promise<string> => {
-    console.log('🔍 Generating summary for messages:', messages.length);
+const generate_summary = async ({ messages }: TGenerateSummaryArgs): Promise<string> => {
     const prompt = generate_initial_summary_prompt({ messages: messages.map(m => `${m.sender}: ${m.message}\n`) });
-    if (messages.length === 0) {
-        return "Empty conversation.";
-    }
 
     try {
         const summary = await generateText({
-            model: mistralModel,
+            model: mistral_model,
             prompt: prompt,
             temperature: SUMMARY_TEMPERATURE,
             maxTokens: SUMMARY_MAX_TOKENS
@@ -74,20 +92,16 @@ const generate_summary = async ({ messages }: { messages: TMessage[] }): Promise
         return summary.text;
     } catch (error) {
         console.error('Error generating summary:', error);
-        return `Summary of ${messages.length} messages discussing various topics.`;
+        return `Discussion with ${messages.length} messages.`;
     }
 };
 
-const generate_summary_updated = async ({ messages, prev_summary }: { messages: TMessage[], prev_summary: string }): Promise<string> => {
-    if (messages.length === 0) {
-        return prev_summary;
-    }
-
+const generate_summary_updated = async ({ messages, prev_summary }: TGenerateSummaryUpdatedArgs): Promise<string> => {
     const prompt = generate_update_summary_prompt({ messages: messages.map(m => `${m.sender}: ${m.message}\n`), previous_summary: prev_summary });
 
     try {
         const summary = await generateText({
-            model: mistralModel,
+            model: mistral_model,
             prompt: prompt,
             temperature: SUMMARY_TEMPERATURE,
             maxTokens: SUMMARY_MAX_TOKENS
@@ -99,22 +113,22 @@ const generate_summary_updated = async ({ messages, prev_summary }: { messages: 
     }
 };
 
-export const hybrid_memory_manager = async ({ conversationId }: { conversationId: Types.ObjectId }): Promise<{ summary: string, messagesToSend: Message[] }> => {
+export const hybrid_memory_manager = async ({ conversation_id }: THybridMemoryManagerArgs): Promise<{ summary: string, messages_to_send: Message[] }> => {
     try {
-        const conversation = await mg.Conversation.findById(conversationId);
+        const conversation = await mg.Conversation.findById(conversation_id);
         if (!conversation) {
             throw new Error('Conversation not found');
         }
 
-        const messages = await mg.ChatMessage.find({ conversationId })
-            .sort({ createdAt: 1 })
+        const messages = await mg.ChatMessage.find({ conversation_id })
+            .sort({ created_at: 1 })
             .lean();
 
         let messages_to_analyze: TMessage[] = [];
 
         const prev_summary = conversation.summary || "";
-        const prev_summary_version = conversation.summaryVersion || 0;
-        const prev_last_summarized_index = conversation.lastSummarizedMessageIndex || 0;
+        const prev_summary_version = conversation.summary_version || 0;
+        const prev_last_summarized_index = conversation.last_summarized_message_index || 0;
 
         console.log(`🔍 Prev last summarized index: ${prev_last_summarized_index}`);
 
@@ -144,9 +158,9 @@ export const hybrid_memory_manager = async ({ conversationId }: { conversationId
                 should_update_db = true;
                 db_update_data = {
                     summary,
-                    summaryVersion: 1,
-                    lastSummarizedMessageIndex: messages_to_analyze.length - 1,
-                    lastTokenCount: 0
+                    summary_version: 1,
+                    last_summarized_message_index: messages_to_analyze.length - 1,
+                    last_token_count: 0
                 };
 
                 console.log("executed the if (if) block")
@@ -157,7 +171,7 @@ export const hybrid_memory_manager = async ({ conversationId }: { conversationId
                 console.log(`🔍 Messages to send: ${messages_to_send.length}`);
 
                 should_update_db = true;
-                db_update_data = { lastTokenCount: tokens_to_analyze };
+                db_update_data = { last_token_count: tokens_to_analyze };
 
                 console.log("executed the if (else) block")
             }
@@ -172,9 +186,9 @@ export const hybrid_memory_manager = async ({ conversationId }: { conversationId
                 should_update_db = true;
                 db_update_data = {
                     summary,
-                    summaryVersion: prev_summary_version + 1,
-                    lastSummarizedMessageIndex: prev_last_summarized_index + messages_to_analyze.length,
-                    lastTokenCount: 0
+                    summary_version: prev_summary_version + 1,
+                    last_summarized_message_index: prev_last_summarized_index + messages_to_analyze.length,
+                    last_token_count: 0
                 };
 
                 console.log("executed the else (if) block")
@@ -184,48 +198,55 @@ export const hybrid_memory_manager = async ({ conversationId }: { conversationId
                 messages_to_send = messages.slice(prev_last_summarized_index + 1);
 
                 should_update_db = true;
-                db_update_data = { lastTokenCount: tokens_to_analyze };
+                db_update_data = { last_token_count: tokens_to_analyze };
                 console.log("executed the else (else) block")
             }
         }
 
         // Update database if needed
         if (should_update_db) {
-            await mg.Conversation.findByIdAndUpdate(conversationId, db_update_data);
+            await mg.Conversation.findByIdAndUpdate(conversation_id, db_update_data);
         }
 
-        // Convert to AI Message format
+        // Convert TMessage[] to Message[] format for AI SDK
         const messages_to_send_ai_format: Message[] = messages_to_send.map((m, index) => ({
             id: m._id?.toString() || `msg-${index}`,
             role: m.sender === 'user' ? 'user' as const : 'assistant' as const,
             content: m.message
         }));
 
-        console.log("messages_to_send :", messages_to_send.length);
         console.log(`📊 Memory Stats - `, db_update_data);
 
-        return { summary, messagesToSend: messages_to_send_ai_format };
-
+        return {
+            summary,
+            messages_to_send: messages_to_send_ai_format
+        };
     } catch (error) {
-        console.error('❌ Error in hybrid_memory_manager:', error);
+        console.error('Error in hybrid memory manager:', error);
 
         // Fallback: return empty summary and try to get recent messages
         try {
-            const fallback_messages = await mg.ChatMessage.find({ conversationId })
-                .sort({ createdAt: -1 })
+            const fallback_messages = await mg.ChatMessage.find({ conversation_id })
+                .sort({ created_at: -1 })
                 .limit(1)
                 .lean();
 
-            const fallback_messages_ai_format: Message[] = fallback_messages.reverse().map((m, index) => ({
+            const fallback_messages_ai_format: Message[] = fallback_messages.map((m, index) => ({
                 id: m._id?.toString() || `msg-${index}`,
                 role: m.sender === 'user' ? 'user' as const : 'assistant' as const,
                 content: m.message
             }));
 
-            return { summary: "", messagesToSend: fallback_messages_ai_format };
+            return {
+                summary: "",
+                messages_to_send: fallback_messages_ai_format
+            };
         } catch (fallback_error) {
-            console.error('❌ Fallback also failed:', fallback_error);
-            return { summary: "", messagesToSend: [] };
+            console.error('Fallback also failed:', fallback_error);
+            return {
+                summary: "",
+                messages_to_send: []
+            };
         }
     } finally {
         cleanup_encoder();

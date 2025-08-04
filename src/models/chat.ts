@@ -5,22 +5,22 @@ import { TMessage } from '../types/message';
 const chatMessageSchema = new Schema<TMessage>({
   message: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
   sender: {
     type: String,
     enum: ['user', 'ai'],
     required: true
   },
-  conversationId: {
+  conversation_id: {
     type: Schema.Types.ObjectId,
     ref: 'Conversation',
     required: true,
     index: true
   }
-}, { timestamps: true });
-
-// Create index for better query performance
-chatMessageSchema.index({ conversationId: 1, createdAt: 1 });
+}, {
+  timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
+});
 
 export const ChatMessage = mongoose.model<TMessage>('ChatMessage', chatMessageSchema);

@@ -42,11 +42,11 @@ export type TDocumentChunk = {
 }
 
 export type TProcessedDocument = {
-    fileId: string;
-    fileName: string;
-    fileSize: number;
-    fileType: string;
-    chunksCreated: number;
+    file_id: string;
+    file_name: string;
+    file_size: number;
+    file_type: string;
+    chunks_created: number;
     chunks: TDocumentChunk[];
 }
 
@@ -69,93 +69,132 @@ export type TFileMetadata = {
     processing_status: 'processing' | 'completed' | 'failed';
 }
 
+// Function argument types
+type TProcessAndStoreDocumentArgs = {
+    file_path: string;
+    file_name: string;
+    file_size: number;
+    mime_type: string;
+    progress_callback?: (progress: number, message: string) => void;
+};
+
+type TExtractTextFromFileArgs = {
+    file_path: string;
+    mime_type: string;
+};
+
+type TChunkTextArgs = {
+    text: string;
+    max_chunk_size?: number;
+    overlap_size?: number;
+};
+
+type TFindLastSentenceEndArgs = {
+    text: string;
+    start: number;
+    end: number;
+};
+
+type TStoreInMongodbArgs = {
+    chunks: TDocumentChunk[];
+    progress_callback?: (progress: number, message: string) => void;
+};
+
+type TSearchSimilarDocumentsArgs = {
+    query: string;
+    max_results?: number;
+};
+
+type TDeleteDocumentArgs = {
+    file_id: string;
+};
+
+type TSearchInMultipleFilesArgs = {
+    file_ids: string[];
+    query: string;
+    max_results?: number;
+};
+
 export class DocumentEmbeddingsMongoDBService {
     private static instance: DocumentEmbeddingsMongoDBService;
 
-    public static getInstance(): DocumentEmbeddingsMongoDBService {
+    public static get_instance(): DocumentEmbeddingsMongoDBService {
         if (!DocumentEmbeddingsMongoDBService.instance) {
             DocumentEmbeddingsMongoDBService.instance = new DocumentEmbeddingsMongoDBService();
         }
         return DocumentEmbeddingsMongoDBService.instance;
     }
 
+    async process_and_store_document({
+        file_path,
+        file_name,
+        file_size,
+        mime_type,
+        progress_callback
+    }: TProcessAndStoreDocumentArgs): Promise<TProcessedDocument> {
 
-    async processAndStoreDocument({
-        filePath,
-        fileName,
-        fileSize,
-        mimeType,
-        progressCallback
-    }: {
-        filePath: string,
-        fileName: string,
-        fileSize: number,
-        mimeType: string,
-        progressCallback?: (progress: number, message: string) => void
-    }): Promise<TProcessedDocument> {
-
-        const fileId = crypto.randomUUID();
+        const file_id = crypto.randomUUID();
 
         try {
             // Initial setup
-            progressCallback?.(5, 'Initializing file processing...');
+            progress_callback?.(5, 'Initializing file processing...');
             await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_SHORT));
 
             // Create document file record
-            const documentFile = new mg.DocumentFile({
-                file_id: fileId,
-                file_name: fileName,
-                file_size: fileSize,
-                file_type: mimeType,
+            const document_file = new mg.DocumentFile({
+                file_id: file_id,
+                file_name: file_name,
+                file_size: file_size,
+                file_type: mime_type,
                 upload_date: new Date(),
                 processing_status: 'processing'
             });
 
-            await documentFile.save();
+            await document_file.save();
 
             // Extract text from file
-            progressCallback?.(10, 'Reading file contents...');
+            progress_callback?.(10, 'Reading file contents...');
             await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_MEDIUM));
 
-            progressCallback?.(25, `Extracting text from ${path.extname(fileName).toUpperCase()} file...`);
-            const extractedText = await this.extractTextFromFile(filePath, mimeType);
-            console.log("file is there after extracting text", fs.existsSync(filePath))
+            progress_callback?.(25, `Extracting text from ${path.extname(file_name).toUpperCase()} file...`);
+            const extracted_text = await this.extract_text_from_file({ file_path, mime_type });
+            console.log("file is there after extracting text", fs.existsSync(file_path))
 
-            if (!extractedText || extractedText.trim().length === 0) {
-                throw new Error('No text content found in the file');
+            if (!extracted_text || extracted_text.trim().length === 0) {
+                throw new Error('The file appears to be empty or contains no readable text. Please ensure the file has content and try uploading again.');
             }
 
-            progressCallback?.(40, `Extracted ${extractedText.length} characters of text`);
+            progress_callback?.(40, `Extracted ${extracted_text.length} characters of text`);
             await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_LONG));
 
             // Chunk the text
-            progressCallback?.(50, 'Analyzing text structure...');
+            progress_callback?.(50, 'Analyzing text structure...');
             await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_MEDIUM));
 
-            progressCallback?.(60, 'Creating optimized text chunks...');
-            const textChunks = this.chunkText(extractedText);
-            console.log("file is there after chunking", fs.existsSync(filePath))
+            progress_callback?.(60, 'Creating optimized text chunks...');
+            const text_chunks = this.chunk_text({ text: extracted_text });
+            console.log("text_chunks", text_chunks);
+            console.log("file is there after chunking", fs.existsSync(file_path))
 
-
-            if (textChunks.length === 0) {
+            if (text_chunks.length === 0) {
                 throw new Error('Failed to create text chunks');
             }
 
-            progressCallback?.(70, `Created ${textChunks.length} text chunks for processing`);
+            progress_callback?.(70, `Created ${text_chunks.length} text chunks for processing`);
             await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_LONG));
 
             // Prepare data
-            progressCallback?.(75, 'Preparing vector embeddings data...');
-            const chunks: TDocumentChunk[] = textChunks.map((chunk, index) => ({
-                id: `${fileId}_chunk_${index}`,
+            progress_callback?.(75, 'Preparing vector embeddings data...');
+            const chunks: TDocumentChunk[] = text_chunks.map((chunk, index) => ({
+                id: `${file_id}_chunk_${index}`,
                 content: chunk,
                 metadata: {
-                    file_id: fileId,
-                    file_name: fileName,
-                    file_size: fileSize,
-                    file_type: mimeType,
+                    file_id: file_id,
+                    file_name: file_name,
+                    file_size: file_size,
+                    file_type: mime_type,
                     chunk_index: index,
-                    chunk_count: textChunks.length,
+                    chunk_count: text_chunks.length,
                     upload_date: new Date().toISOString()
                 }
             }));
@@ -163,126 +202,170 @@ export class DocumentEmbeddingsMongoDBService {
             await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_MEDIUM));
 
             // Generate embeddings and store in MongoDB
-            progressCallback?.(85, 'Generating vector embeddings with VoyageAI...');
-            await this.storeInMongoDB(chunks, progressCallback);
-            console.log("file is there after storing in mongodb", fs.existsSync(filePath))
+            progress_callback?.(85, 'Generating vector embeddings with VoyageAI...');
+            await this.store_in_mongodb({ chunks, progress_callback });
+            console.log("file is there after storing in mongodb", fs.existsSync(file_path))
 
             // Update document file status
-            documentFile.processing_status = 'completed';
-            documentFile.chunk_count = chunks.length;
-            await documentFile.save();
+            document_file.processing_status = 'completed';
+            document_file.chunk_count = chunks.length;
+            await document_file.save();
 
-            progressCallback?.(100, `Successfully processed "${fileName}" with ${chunks.length} chunks`);
+            progress_callback?.(100, `Successfully processed "${file_name}" with ${chunks.length} chunks`);
 
             return {
-                fileId,
-                fileName,
-                fileSize,
-                fileType: mimeType,
-                chunksCreated: chunks.length,
+                file_id,
+                file_name,
+                file_size,
+                file_type: mime_type,
+                chunks_created: chunks.length,
                 chunks
             };
 
         } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            const error_message = error instanceof Error ? error.message : 'Unknown error occurred';
             console.error('Error processing document:', error);
 
             // Update document file status to failed
             try {
                 await mg.DocumentFile.findOneAndUpdate(
-                    { file_id: fileId },
+                    { file_id: file_id },
                     {
                         processing_status: 'failed',
-                        error_message: errorMessage
+                        error_message: error_message
                     }
                 );
-            } catch (updateError) {
-                console.error('Error updating document file status:', updateError);
+            } catch (update_error) {
+                console.error('Error updating document file status:', update_error);
             }
 
-            progressCallback?.(0, `Error: ${errorMessage}`);
-            throw new Error(`Document processing failed: ${errorMessage}`);
+            progress_callback?.(0, `Error: ${error_message}`);
+            throw new Error(`Document processing failed: ${error_message}`);
         }
     }
 
-
-    private async extractTextFromFile(filePath: string, mimeType: string): Promise<string> {
-        console.log('Extracting text from file:', filePath);
+    private async extract_text_from_file({ file_path, mime_type }: TExtractTextFromFileArgs): Promise<string> {
+        console.log('Extracting text from file:', file_path);
 
         // Validate file exists before reading
-        if (!fs.existsSync(filePath)) {
-            throw new Error(`File not found at path: ${filePath}`);
+        if (!fs.existsSync(file_path)) {
+            throw new Error(`File not found at path: ${file_path}`);
         }
 
-        const fileBuffer = fs.readFileSync(filePath);
+        const file_buffer = fs.readFileSync(file_path);
 
-        switch (mimeType) {
+        switch (mime_type) {
             case 'application/pdf':
-                const pdfData = await pdfParse(fileBuffer);
-                return pdfData.text;
+                const pdf_data = await pdfParse(file_buffer);
+                return pdf_data.text;
 
             case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-                const docxData = await mammoth.extractRawText({ buffer: fileBuffer });
-                return docxData.value;
+                const docx_data = await mammoth.extractRawText({ buffer: file_buffer });
+                return docx_data.value;
 
             case 'text/plain':
-                return fileBuffer.toString('utf-8');
+                return file_buffer.toString('utf-8');
 
             case 'text/markdown':
                 const md = new MarkdownIt();
-                const markdownText = fileBuffer.toString('utf-8');
-                return md.render(markdownText);
+                const markdown_text = file_buffer.toString('utf-8');
+                return md.render(markdown_text);
 
             default:
-                throw new Error(`Unsupported file type: ${mimeType}`);
+                throw new Error(`Unsupported file type: ${mime_type}`);
         }
     }
 
-
-    private chunkText(text: string, maxChunkSize: number = DEFAULT_CHUNK_SIZE, overlapSize: number = DEFAULT_OVERLAP_SIZE): string[] {
+    private chunk_text({ text, max_chunk_size = DEFAULT_CHUNK_SIZE, overlap_size = DEFAULT_OVERLAP_SIZE }: TChunkTextArgs): string[] {
         const chunks: string[] = [];
-        const cleanText = text.replace(/\s+/g, ' ').trim();
+        const clean_text = text.replace(/\s+/g, ' ').trim();
 
-        if (cleanText.length <= maxChunkSize) {
-            return [cleanText];
+        if (clean_text.length <= max_chunk_size) {
+            return [clean_text];
         }
 
-        let startIndex = 0;
+        let start_index = 0;
 
-        while (startIndex < cleanText.length) {
-            let endIndex = startIndex + maxChunkSize;
+        while (start_index < clean_text.length) {
+            let end_index = start_index + max_chunk_size;
 
-            if (endIndex >= cleanText.length) {
-                endIndex = cleanText.length;
+            // If we're at the end of the text, take everything
+            if (end_index >= clean_text.length) {
+                end_index = clean_text.length;
             } else {
-                // Try to break at sentence boundaries
-                const lastSentenceEnd = cleanText.lastIndexOf('.', endIndex);
-                const lastExclamation = cleanText.lastIndexOf('!', endIndex);
-                const lastQuestion = cleanText.lastIndexOf('?', endIndex);
-                const bestSentenceEnd = Math.max(lastSentenceEnd, lastExclamation, lastQuestion);
+                // Try to break at sentence boundaries first
+                const search_start = Math.max(start_index, end_index - Math.floor(max_chunk_size * 0.3)); // Search in last 30% of chunk
+                const last_sentence_end = this.findLastSentenceEnd({ text: clean_text, start: search_start, end: end_index });
 
-                if (bestSentenceEnd > startIndex + maxChunkSize * MIN_CHUNK_THRESHOLD) {
-                    endIndex = bestSentenceEnd + 1;
+                if (last_sentence_end > start_index) {
+                    end_index = last_sentence_end + 1;
                 } else {
                     // Fallback to word boundaries
-                    const wordEnd = cleanText.lastIndexOf(' ', endIndex);
-                    if (wordEnd > startIndex + maxChunkSize * MIN_CHUNK_THRESHOLD) {
-                        endIndex = wordEnd;
+                    const word_end = clean_text.lastIndexOf(' ', end_index);
+                    if (word_end > start_index + Math.floor(max_chunk_size * 0.1)) { // Ensure minimum chunk size
+                        end_index = word_end;
                     }
+                    // If no good word boundary found, keep the original end_index
                 }
             }
 
-            chunks.push(cleanText.substring(startIndex, endIndex).trim());
+            const chunk = clean_text.substring(start_index, end_index).trim();
+            if (chunk.length > 0) {
+                chunks.push(chunk);
+            }
 
-            // Move to next chunk with overlap
-            startIndex = Math.max(startIndex + 1, endIndex - overlapSize);
+            // Move to next chunk - ensure we always make progress
+            if (end_index >= clean_text.length) {
+                break; // We're done
+            }
+
+            // Calculate next start position with overlap
+            const next_start = Math.max(
+                start_index + Math.floor(max_chunk_size * 0.5), // Ensure minimum progress (50% of chunk size)
+                end_index - overlap_size
+            );
+
+            // Safety check: ensure we're making progress
+            if (next_start <= start_index) {
+                start_index = start_index + Math.floor(max_chunk_size * 0.5);
+            } else {
+                start_index = next_start;
+            }
         }
 
         return chunks.filter(chunk => chunk.length > 0);
     }
 
+    // Helper method to find sentence endings more accurately
+    private findLastSentenceEnd({ text, start, end }: TFindLastSentenceEndArgs): number {
+        const sentence_endings = ['.', '!', '?'];
+        let last_pos = -1;
 
-    private async storeInMongoDB(chunks: TDocumentChunk[], progressCallback?: (progress: number, message: string) => void): Promise<void> {
+        for (let i = end - 1; i >= start; i--) {
+            if (sentence_endings.includes(text[i])) {
+                // Check if it's likely a real sentence ending (not an abbreviation)
+                const next_char = text[i + 1];
+                if (!next_char || next_char === ' ' || next_char === '\n') {
+                    // Additional check: avoid common abbreviations
+                    const preceding_text = text.substring(Math.max(0, i - 10), i).toLowerCase();
+                    const common_abbrevs = ['dr.', 'mr.', 'mrs.', 'ms.', 'inc.', 'ltd.', 'etc.', 'vs.', 'e.g.', 'i.e.'];
+
+                    const is_abbreviation = common_abbrevs.some(abbrev =>
+                        preceding_text.endsWith(abbrev.slice(0, -1))
+                    );
+
+                    if (!is_abbreviation) {
+                        last_pos = i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        return last_pos;
+    }
+
+    private async store_in_mongodb({ chunks, progress_callback }: TStoreInMongodbArgs): Promise<void> {
         try {
             console.log(`Processing ${chunks.length} chunks with 3 RPM rate limit (${EMBEDDING_RATE_LIMIT_DELAY} seconds between requests)`);
 
@@ -291,7 +374,7 @@ export class DocumentEmbeddingsMongoDBService {
 
                 // Calculate progress from 85% to 95% (embeddings portion of overall upload)
                 const progress = EMBEDDING_PROGRESS_BASE + Math.floor((i / chunks.length) * EMBEDDING_PROGRESS_RANGE);
-                progressCallback?.(progress, `Generating embedding for chunk ${i + 1}/${chunks.length}...`);
+                progress_callback?.(progress, `Generating embedding for chunk ${i + 1}/${chunks.length}...`);
 
                 // Generate embedding for this single chunk
                 const embedding = await get_embedding({ text: chunk.content });
@@ -302,7 +385,7 @@ export class DocumentEmbeddingsMongoDBService {
                 }
 
                 // Prepare document to insert
-                const documentToInsert = {
+                const document_to_insert = {
                     file_id: chunk.metadata.file_id,
                     chunk_id: chunk.id,
                     content: chunk.content,
@@ -310,13 +393,13 @@ export class DocumentEmbeddingsMongoDBService {
                     embedding: embedding
                 };
 
-                await mg.DocumentEmbedding.create(documentToInsert);
+                await mg.DocumentEmbedding.create(document_to_insert);
 
                 // Rate limiting: Wait between requests (except for the last chunk)
                 if (i < chunks.length - 1) {
                     // Show countdown during wait time
                     for (let countdown = EMBEDDING_RATE_LIMIT_DELAY; countdown > 0; countdown--) {
-                        progressCallback?.(progress, `Rate limit wait: ${countdown}s remaining... (${chunks.length - i - 1} chunks left)`);
+                        progress_callback?.(progress, `Rate limit wait: ${countdown}s remaining... (${chunks.length - i - 1} chunks left)`);
                         await new Promise(resolve => setTimeout(resolve, 1000));
                     }
                 }
@@ -324,18 +407,18 @@ export class DocumentEmbeddingsMongoDBService {
 
             console.log(`Successfully stored ${chunks.length} chunks with embeddings in MongoDB`);
         } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            const error_message = error instanceof Error ? error.message : 'Unknown error occurred';
             console.error('Error storing in MongoDB:', error);
-            throw new Error(`Failed to store in database: ${errorMessage}`);
+            throw new Error(`Failed to store in database: ${error_message}`);
         }
     }
 
-    async searchSimilarDocuments({ query, maxResults = DEFAULT_SEARCH_RESULTS }: { query: string, maxResults?: number }): Promise<TSearchResults> {
+    async search_similar_documents({ query, max_results = DEFAULT_SEARCH_RESULTS }: TSearchSimilarDocumentsArgs): Promise<TSearchResults> {
         try {
             // Generate embedding for the search query
-            const queryEmbedding = await get_embedding({ text: query });
+            const query_embedding = await get_embedding({ text: query });
 
-            if (!queryEmbedding) {
+            if (!query_embedding) {
                 throw new Error('Failed to generate embedding for search query');
             }
 
@@ -344,9 +427,9 @@ export class DocumentEmbeddingsMongoDBService {
                     $vectorSearch: {
                         index: VECTOR_INDEX_NAME,
                         path: "embedding",
-                        queryVector: queryEmbedding,
-                        numCandidates: maxResults * 10,
-                        limit: maxResults
+                        queryVector: query_embedding,
+                        numCandidates: max_results * 10,
+                        limit: max_results
                     }
                 },
                 {
@@ -366,37 +449,36 @@ export class DocumentEmbeddingsMongoDBService {
             // Execute the aggregation pipeline
             const results = await mg.DocumentEmbedding.aggregate(pipeline).exec();
 
+
             // console.log('Results:', results);
 
             // Format results to match expected usage pattern (array of string arrays)
             return [results.map((r: { content: string }) => r.content)];
 
         } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            const error_message = error instanceof Error ? error.message : 'Unknown error occurred';
             console.error('Error searching documents:', error);
-            throw new Error(`Search failed: ${errorMessage}`);
+            throw new Error(`Search failed: ${error_message}`);
         }
     }
 
-
-    async deleteDocument({ fileId }: { fileId: string }): Promise<void> {
+    async delete_document({ file_id }: TDeleteDocumentArgs): Promise<void> {
         try {
             // Delete all embeddings for this file
-            const deleteResult = await mg.DocumentEmbedding.deleteMany({ file_id: fileId });
-            console.log(`Deleted ${deleteResult.deletedCount} embeddings for file ${fileId}`);
+            const delete_result = await mg.DocumentEmbedding.deleteMany({ file_id: file_id });
+            console.log(`Deleted ${delete_result.deletedCount} embeddings for file ${file_id}`);
 
             // Delete the file record
-            await mg.DocumentFile.deleteOne({ file_id: fileId });
-            console.log(`Deleted file record for ${fileId}`);
+            await mg.DocumentFile.deleteOne({ file_id: file_id });
+            console.log(`Deleted file record for ${file_id}`);
         } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            const error_message = error instanceof Error ? error.message : 'Unknown error occurred';
             console.error('Error deleting document:', error);
-            throw new Error(`Delete failed: ${errorMessage}`);
+            throw new Error(`Delete failed: ${error_message}`);
         }
     }
 
-
-    async getAllFiles(): Promise<TFileMetadata[]> {
+    async get_all_files(): Promise<TFileMetadata[]> {
         try {
             const files = await mg.DocumentFile.find({})
                 .sort({ upload_date: -1 })
@@ -412,18 +494,17 @@ export class DocumentEmbeddingsMongoDBService {
                 processing_status: file.processing_status
             }));
         } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            const error_message = error instanceof Error ? error.message : 'Unknown error occurred';
             console.error('Error getting all files:', error);
-            throw new Error(`Failed to get files: ${errorMessage}`);
+            throw new Error(`Failed to get files: ${error_message}`);
         }
     }
 
-
-    async searchInMultipleFiles({ fileIds, query, maxResults = DEFAULT_SEARCH_RESULTS }: { fileIds: string[], query: string, maxResults?: number }): Promise<TSearchResults> {
+    async search_in_multiple_files({ file_ids, query, max_results = DEFAULT_SEARCH_RESULTS }: TSearchInMultipleFilesArgs): Promise<TSearchResults> {
         try {
-            const queryEmbedding = await get_embedding({ text: query });
+            const query_embedding = await get_embedding({ text: query });
 
-            if (!queryEmbedding) {
+            if (!query_embedding) {
                 throw new Error('Failed to generate embedding for search query');
             }
 
@@ -432,11 +513,11 @@ export class DocumentEmbeddingsMongoDBService {
                     $vectorSearch: {
                         index: SPECIFIC_DOCUMENT_INDEX_NAME,
                         path: "embedding",
-                        queryVector: queryEmbedding,
-                        numCandidates: maxResults * 10,
-                        limit: maxResults,
+                        queryVector: query_embedding,
+                        numCandidates: max_results * 10,
+                        limit: max_results,
                         filter: {
-                            file_id: { $in: fileIds }
+                            file_id: { $in: file_ids }
                         }
                     }
                 },
@@ -459,14 +540,11 @@ export class DocumentEmbeddingsMongoDBService {
             return [results.map((r: { content: string }) => r.content)];
 
         } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            const error_message = error instanceof Error ? error.message : 'Unknown error occurred';
             console.error('Error searching in multiple files:', error);
-            throw new Error(`Multi-file search failed: ${errorMessage}`);
+            throw new Error(`Multi-file search failed: ${error_message}`);
         }
     }
-
-
 }
 
-
-export const documentEmbeddingsMongoDBService = DocumentEmbeddingsMongoDBService.getInstance();
+export const document_embeddings_mongodb_service = DocumentEmbeddingsMongoDBService.get_instance();

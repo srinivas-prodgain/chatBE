@@ -12,13 +12,8 @@ const router: Router = express.Router();
 router.get('/', asyncHandler(get_all_files_meta_data));
 
 // Delete file from vector db
-router.delete('/delete/:fileId', asyncHandler(delete_file_from_vector_db));
+router.delete('/delete/:file_id', asyncHandler(delete_file_from_vector_db));
 
-// // Get file content by ID
-// fileRouter.get('/:fileId', asyncHandler(get_file_content));
-
-// // Download file by ID
-// fileRouter.get('/:fileId/download', asyncHandler(download_file));
 
 // Single upload endpoint that handles file upload with SSE streaming
 router.post('/upload/:uploadId',

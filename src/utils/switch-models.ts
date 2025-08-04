@@ -1,24 +1,27 @@
 import { LanguageModel } from "ai";
-import { mistralModel, openaiModel } from "../services/ai";
+import { mistral_model, openai_model } from "../services/ai";
 
+type TSwitchModelsArgs = {
+    model: string;
+}
 
-export const switch_models = (model: string): LanguageModel => {
-    let selectedModel: LanguageModel;
+export const switch_models = ({ model }: TSwitchModelsArgs): LanguageModel => {
+    let selected_model: LanguageModel;
 
     switch (model) {
         case 'mistral':
-            selectedModel = mistralModel;
+            selected_model = mistral_model;
             break;
         case 'gemini':
             // Gemini is disabled for now, fallback to OpenAI
             console.log('Gemini requested but disabled, falling back to OpenAI');
-            selectedModel = openaiModel;
+            selected_model = openai_model;
             break;
         case 'openai':
         default:
-            selectedModel = openaiModel;
+            selected_model = openai_model;
             break;
     }
 
-    return selectedModel;
+    return selected_model;
 }

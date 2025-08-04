@@ -1,6 +1,10 @@
-import { mistralModel } from '../services/ai';
+import { mistral_model } from '../services/ai';
 import { generateObject } from 'ai';
 import { z } from 'zod';
+
+type TAnalyzeQueryArgs = {
+    query: string;
+};
 
 export type TQueryAnalysis = {
     needsSearch: boolean;
@@ -10,7 +14,7 @@ export type TQueryAnalysis = {
 }
 
 
-export const analyzeQuery = async (query: string): Promise<TQueryAnalysis> => {
+export const analyzeQuery = async ({ query }: TAnalyzeQueryArgs): Promise<TQueryAnalysis> => {
 
     try {
         const queryAnalysisSchema = z.object({
@@ -21,7 +25,7 @@ export const analyzeQuery = async (query: string): Promise<TQueryAnalysis> => {
         });
 
         const result = await generateObject({
-            model: mistralModel,
+            model: mistral_model,
             schema: queryAnalysisSchema,
             prompt: `You are a query analyzer. Determine if the user's query needs to search through uploaded documents or if it can be answered conversationally.
 

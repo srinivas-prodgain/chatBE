@@ -3,35 +3,37 @@ import { z } from 'zod';
 
 import { mg } from '../../config/mg';
 import { throw_error } from '../../utils/throw-error';
+import { TConversation } from '@/types/conversation';
+import { TMessage } from '@/types/message';
 
 export const get_conversation_by_id = async ({ req, res }: { req: Request, res: Response }) => {
     const { uid } = z_get_conversation_by_id_req_params.parse(req.params);
 
     // Find conversation by uid
-    const conversation = await mg.Conversation.findOne({ uid });
+    const conversation = await mg.Conversation.findOne<TConversation>({ uid });
 
     if (!conversation) {
         throw_error({ message: 'Conversation not found', status_code: 404 });
-        return; // This line helps TypeScript understand that conversation is not null below
+        return;
     }
 
-    // Get messages separately using conversationId
-    const messages = await mg.ChatMessage.find({ conversationId: conversation._id })
-        .sort({ createdAt: 1 })
-        .select('message sender createdAt');
+    // Get messages separately using conversation_id
+    const messages = await mg.ChatMessage.find<Pick<TMessage, 'message' | 'sender' | 'created_at'>>({ conversation_id: conversation._id })
+        .sort({ created_at: 1 })
+        .select('message sender created_at');
 
     // Return conversation with messages in the new populated format
-    const conversationWithMessages = {
+    const conversation_with_messages = {
         ...conversation.toObject(),
         messages
     };
 
     res.status(200).json({
-        data: conversationWithMessages,
+        data: conversation_with_messages,
         message: "Conversation fetched successfully"
     });
 };
 
 const z_get_conversation_by_id_req_params = z.object({
-    uid: z.string().min(1, 'Conversation ID is required')
+    uid: z.string().min(1, 'uid is required')
 });

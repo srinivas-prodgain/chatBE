@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 
-import { documentEmbeddingsMongoDBService, TProcessedDocument } from '../../services/document-embeddings-mongodb-service';
+import { document_embeddings_mongodb_service, TProcessedDocument } from '../../services/document-embeddings-mongodb-service';
 import {
     MAX_FILE_SIZE,
     UPLOAD_ID_RANDOM_LENGTH,
@@ -16,11 +16,11 @@ type TAllowedExtension = '.pdf' | '.txt' | '.docx' | '.md';
 
 // Upload response type (without chunks to reduce payload size)
 export type TUploadResponse = {
-    fileId: string;
-    fileName: string;
-    fileSize: number;
-    fileType: string;
-    chunksCreated: number;
+    file_id: string;
+    file_name: string;
+    file_size: number;
+    file_type: string;
+    chunks_created: number;
 }
 
 // Type guard function for file extension validation
@@ -119,12 +119,12 @@ export const handle_upload = async ({ req, res }: { req: Request, res: Response 
 
         send_upload_progress({ uploadId, progress: UPLOAD_PROGRESS.PROCESSING_STARTED, message: 'Starting document processing...', res });
 
-        const processedDocument = await documentEmbeddingsMongoDBService.processAndStoreDocument({
-            filePath: req.file.path,
-            fileName: req.file.originalname,
-            fileSize: req.file.size,
-            mimeType: req.file.mimetype,
-            progressCallback: (progress: number, message: string) => {
+        const processedDocument = await document_embeddings_mongodb_service.process_and_store_document({
+            file_path: req.file.path,
+            file_name: req.file.originalname,
+            file_size: req.file.size,   
+            mime_type: req.file.mimetype,
+            progress_callback: (progress: number, message: string) => {
                 const adjustedProgress = UPLOAD_PROGRESS.PROCESSING_STARTED + (progress * 0.7);
                 send_upload_progress({ uploadId, progress: Math.round(adjustedProgress), message, res });
             }
@@ -140,21 +140,21 @@ export const handle_upload = async ({ req, res }: { req: Request, res: Response 
         send_upload_complete({
             uploadId,
             data: {
-                fileId: processedDocument.fileId,
-                fileName: processedDocument.fileName,
-                fileSize: processedDocument.fileSize,
-                fileType: processedDocument.fileType,
-                chunksCreated: processedDocument.chunksCreated
+                file_id: processedDocument.file_id,
+                file_name: processedDocument.file_name,
+                file_size: processedDocument.file_size,
+                file_type: processedDocument.file_type,
+                chunks_created: processedDocument.chunks_created
             },
             res
         });
 
-        console.log(`File processed successfully: ${req.file.originalname} (${processedDocument.chunksCreated} chunks)`);
+        console.log(`File processed successfully: ${req.file.originalname} (${processedDocument.chunks_created} chunks)`);
 
     } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        const error_message = error instanceof Error ? error.message : 'Unknown error occurred';
         console.error('File processing error:', error);
-        send_upload_error({ uploadId, message: `File processing failed: ${errorMessage}`, res });
+        send_upload_error({ uploadId, message: `File processing failed: ${error_message}`, res });
 
         if (fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);

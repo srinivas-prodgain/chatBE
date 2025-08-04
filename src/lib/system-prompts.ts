@@ -4,9 +4,22 @@ type TSystemPromptArgs = {
     selected_file_ids?: string[];
     include_qr_tools?: boolean;
     include_web_search_tools?: boolean;
-    include_time_tools?: boolean;
+    include_weather_tools?: boolean;
     custom_instructions?: string;
     summary?: string;
+};
+
+type TGenerateUpdateSummaryPromptArgs = {
+    messages: string[];
+    previous_summary?: string;
+};
+
+type TGenerateInitialSummaryPromptArgs = {
+    messages: string[];
+};
+
+type TGenerateQueryAnalysisPromptArgs = {
+    query: string;
 };
 
 type TSystemPromptResponse = {
@@ -20,7 +33,7 @@ export const generate_system_prompt = ({
     selected_file_ids,
     include_qr_tools = true,
     include_web_search_tools = true,
-    include_time_tools = true,
+    include_weather_tools = true,
     custom_instructions,
     summary
 }: TSystemPromptArgs): TSystemPromptResponse => {
@@ -45,17 +58,30 @@ Use generateQRCode when users ask about:
         system_content += `.`;
     }
 
-    if (include_time_tools) {
-        system_content += `
-**Get current date and time** using time_tool to get the current date and time in different formats.
+    // Add current date and time information
+    const current_date = new Date();
+    const current_time_utc = current_date.toISOString();
+    const current_time_readable = current_date.toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZoneName: 'short',
+        timeZone: 'UTC'
+    });
 
-Use time_tool when users ask about:
-- Current date and time
-- Time in different timezones
-- Time-related calculations
+    system_content += `
 
-        `;
-    }
+**CURRENT DATE & TIME:**
+- Current UTC time: ${current_time_utc}
+- Readable format: ${current_time_readable}
+- Unix timestamp: ${current_date.getTime()}
+
+Use this information when users ask about current time, dates, or time-related questions. You have immediate access to the current date and time without needing any tools.
+`;
 
     if (include_web_search_tools) {
         system_content += ` You can:
@@ -75,6 +101,30 @@ Use time_tool when users ask about:
     **Important:** If you believe you lack adequate information to fully answer a user's question, or if you think web search would significantly improve your response, you should proactively use the webSearch tool to gather the necessary details.
     
     `;
+    }
+
+    if (include_weather_tools) {
+        system_content += `
+**Get weather information** using weather_tool to get current weather and forecasts for any city worldwide using WeatherAPI.com.
+
+Use weather_tool when users ask about:
+- Current weather conditions in any city
+- Weather forecasts (up to 10 days)
+- Temperature, humidity, wind, pressure information
+- Weather-related questions like "What's the weather like in...?"
+- "Is it raining in...?" or "How hot is it in...?"
+- Planning activities based on weather
+
+The tool provides:
+- Current temperature, feels-like temperature
+- Weather conditions (sunny, cloudy, rainy, etc.)
+- Humidity, pressure, wind speed and direction
+- Visibility, cloudiness, and UV index
+- Day/night status and local time
+- Chance of rain/snow, sunrise/sunset times
+- Optional detailed forecast up to 10 days
+
+        `;
     }
 
     if (summary?.trim()) {
@@ -120,7 +170,7 @@ ${relevant_context}
     };
 };
 
-export const generate_update_summary_prompt = ({ messages, previous_summary }: { messages: string[], previous_summary?: string }): string => {
+export const generate_update_summary_prompt = ({ messages, previous_summary }: TGenerateUpdateSummaryPromptArgs): string => {
     const UPDATE_SUMMARY_PROMPT = `You are an expert conversation analyst specializing in incremental summary updates. Your task is to intelligently merge new conversation content with an existing summary while maintaining accuracy and coherence.
 
 ## CRITICAL REQUIREMENTS:
@@ -190,7 +240,7 @@ Generate an updated summary that represents the complete conversation history ac
     return UPDATE_SUMMARY_PROMPT;
 };
 
-export const generate_initial_summary_prompt = ({ messages }: { messages: string[] }): string => {
+export const generate_initial_summary_prompt = ({ messages }: TGenerateInitialSummaryPromptArgs): string => {
 
     const INITIAL_SUMMARY_PROMPT = `You are an expert conversation analyst and summarization specialist. Your task is to create a comprehensive yet concise summary of a conversation that will serve as long-term memory for an AI assistant.
 
@@ -251,7 +301,7 @@ Generate a summary that would allow an AI assistant to seamlessly continue this 
     return INITIAL_SUMMARY_PROMPT;
 }
 
-export const generate_query_analysis_prompt = ({ query }: { query: string }): string => {
+export const generate_query_analysis_prompt = ({ query }: TGenerateQueryAnalysisPromptArgs): string => {
     return `Analyze this user query to determine if it requires searching through uploaded documents/files.
 
 User Query: "${query}"

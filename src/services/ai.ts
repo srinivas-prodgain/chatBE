@@ -3,9 +3,9 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createMistral } from '@ai-sdk/mistral';
 import { VoyageAIClient } from 'voyageai';
 
-export const openaiModel = openai('gpt-4o-mini');
+export const openai_model = openai('gpt-4o-mini');
 
-export const geminiModel = createGoogleGenerativeAI({
+export const gemini_model = createGoogleGenerativeAI({
     apiKey: process.env.GEMINI_API_KEY,
     baseURL: 'https://api.google.com/v1',
 });
@@ -15,21 +15,20 @@ const mistral = createMistral({
     baseURL: 'https://api.mistral.ai/v1',
 });
 
-export const mistralModel = mistral('mistral-large-latest');
+export const mistral_model = mistral('mistral-large-latest');
 
-// Set up Voyage AI configuration
+type TGetEmbeddingArgs = {
+    text: string;
+};
+
 const client = new VoyageAIClient({ apiKey: process.env.VOYAGE_API_KEY! });
 
-// Function to generate embeddings using the Voyage AI API
-export const get_embedding = async ({ text }: { text: string }): Promise<number[] | undefined> => {
+export const get_embedding = async ({ text }: TGetEmbeddingArgs): Promise<number[] | undefined> => {
     const results = await client.embed({
         input: text,
         model: "voyage-3-large",
-        outputDimension: 1024  // Match existing MongoDB vector index
+        outputDimension: 1024
     });
     return results?.data?.[0]?.embedding;
 };
-
-// For testing fallback: you can temporarily set OPENAI_API_KEY to invalid value
-// or use the commented line in chatRoutes.ts to force an error
 

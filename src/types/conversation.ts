@@ -1,14 +1,15 @@
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
-// Backend-specific conversation type with mongoose Document
-export type TConversation = Document & {
+export type TConversation = Document<unknown, any, any> & {
     uid: string;
     title: string;
-    userId?: string;
+    user_id?: string;
     summary?: string;
-    createdAt: Date;
-    lastSummarizedMessageIndex: number;
-    lastTokenCount: number;
-    summaryVersion: number;
-    updatedAt: Date;
+    created_at: Date;
+    last_summarized_message_index: number;
+    last_token_count: number;
+    summary_version: number;
+    updated_at: Date;
+} & {
+    _id: Types.ObjectId;
 };

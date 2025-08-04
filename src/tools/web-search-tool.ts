@@ -2,9 +2,18 @@ import { tool } from "ai";
 import { z } from "zod";
 import { tavily } from "@tavily/core";
 import { emitToolStatus } from "../utils/event-emitter";
+import { ToolStatus } from "../types/shared";
 
 // Initialize Tavily client
 const tavilyClient = tavily({ apiKey: process.env.TAVILY_API_KEY! });
+
+type TavilySearchResult = {
+    title: string;
+    url: string;
+    content: string;
+    score: number;
+    published_date?: string;
+};
 
 export const web_search_tool = tool({
     description: 'Search the web for current information, news, and real-time data',
@@ -16,7 +25,7 @@ export const web_search_tool = tool({
     }),
 
     execute: async ({ query, maxResults = 5, includeAnswer = true, searchDepth = 'advanced' }) => {
-        emitToolStatus({ tool: 'web_search', status: 'started' });
+        emitToolStatus({ status: { tool: 'web_search', status: ToolStatus.Started } });
         console.log('🔧 TOOL CALLED: webSearch');
         console.log('📋 Parameters:', { query, maxResults, includeAnswer, searchDepth });
         console.log('⏰ Timestamp:', new Date().toISOString());
@@ -33,12 +42,12 @@ export const web_search_tool = tool({
 
             console.log(`✅ Web search successful: Found ${response.results?.length || 0} results`);
 
-            emitToolStatus({ tool: 'web_search', status: 'completed', details: { resultCount: response.results?.length || 0 } });
+            emitToolStatus({ status: { tool: 'web_search', status: ToolStatus.Completed, details: { result_count: response.results?.length || 0 } } });
             return {
                 success: true,
                 query: query,
                 answer: response.answer || '',
-                results: response.results?.map((result: any) => ({
+                results: response.results?.map((result: TavilySearchResult) => ({
                     title: result.title,
                     url: result.url,
                     content: result.content,
@@ -52,7 +61,7 @@ export const web_search_tool = tool({
 
         } catch (error) {
             console.error('❌ Web search error:', error);
-            emitToolStatus({ tool: 'web_search', status: 'completed', details: { error: error instanceof Error ? error.message : 'Search failed'} });
+            emitToolStatus({ status: { tool: 'web_search', status: ToolStatus.Completed, details: { error: error instanceof Error ? error.message : 'Search failed' } } });
             // Better error handling
             let errorMessage = 'Web search failed';
             if (error instanceof Error) {

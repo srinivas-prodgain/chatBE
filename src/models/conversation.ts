@@ -1,8 +1,6 @@
 import mongoose, { Schema } from 'mongoose';
 import { TConversation } from '../types/conversation';
 
-
-
 const conversationSchema = new Schema<TConversation>({
   uid: {
     type: String,
@@ -15,7 +13,7 @@ const conversationSchema = new Schema<TConversation>({
     required: true,
     trim: true
   },
-  userId: {
+  user_id: {
     type: String,
     required: false,
     index: true
@@ -25,27 +23,24 @@ const conversationSchema = new Schema<TConversation>({
     required: false,
     default: "",
   },
-  summaryVersion: {
+  summary_version: {
     type: Number,
     required: false,
     default: 0,
   },
-  lastSummarizedMessageIndex: {
+  last_summarized_message_index: {
     type: Number,
     default: 0,
     required: false,
   },
-  lastTokenCount: {
+  last_token_count: {
     type: Number,
     default: 0,
     required: false,
   },
 
 }, {
-  timestamps: true
+  timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
 });
-
-
-
 
 export const Conversation = mongoose.model<TConversation>('Conversation', conversationSchema);

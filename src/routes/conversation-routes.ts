@@ -10,7 +10,7 @@ import { get_conversation_by_id } from '../controllers/conversation/get-conversa
 
 const router: Router = express.Router();
 
-router.get('/user/:userId',
+router.get('/user/:user_id',
   asyncHandler(get_all_conversations)
 );
 router.get('/:uid',

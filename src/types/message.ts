@@ -1,9 +1,9 @@
-import mongoose, { Document } from 'mongoose';
+import { Document, Schema } from 'mongoose';
 
-// Backend-specific message type with mongoose Document
 export type TMessage = Document & {
     message: string;
     sender: 'user' | 'ai';
-    timestamp: Date;
-    conversationId: mongoose.Types.ObjectId;
+    conversation_id: Schema.Types.ObjectId;
+    created_at: Date;
+    updated_at: Date;
 };
