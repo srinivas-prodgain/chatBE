@@ -1,26 +1,26 @@
 import { Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 
-import { document_embeddings_mongodb_service, TProcessedDocument } from '../../services/document-embeddings-mongodb-service';
+import { document_embeddings_mongodb_service } from '../../services/document-embeddings-mongodb-service';
+import { DocumentFile } from '../../models/document-file';
 import {
     MAX_FILE_SIZE,
-    UPLOAD_ID_RANDOM_LENGTH,
-    UPLOAD_PROGRESS,
-    ALLOWED_FILE_EXTENSIONS,
-    SSE_HEADERS
+    ALLOWED_FILE_EXTENSIONS
 } from '../../constants/file-upload';
 
 // Type for allowed file extensions
 type TAllowedExtension = '.pdf' | '.txt' | '.docx' | '.md';
 
-// Upload response type (without chunks to reduce payload size)
+// Upload response type for immediate response
 export type TUploadResponse = {
     file_id: string;
     file_name: string;
     file_size: number;
     file_type: string;
-    chunks_created: number;
+    status: 'pending' | 'processing' | 'completed' | 'failed';
+    message: string;
 }
 
 // Type guard function for file extension validation
@@ -28,52 +28,53 @@ const is_allowed_extension = (extension: string): extension is TAllowedExtension
     return ALLOWED_FILE_EXTENSIONS.DOCUMENTS.includes(extension as TAllowedExtension);
 };
 
-const send_upload_progress = ({ uploadId, progress, message, res }: { uploadId: string, progress: number, message?: string, res: Response }): void => {
-    const eventData = {
-        type: 'progress',
-        uploadId,
-        progress,
-        message: message || `Progress: ${progress}%`,
-        timestamp: new Date().toISOString()
-    };
+// Background processing function
+const process_file_in_background = async ({ file_path, file_id, file_name, file_size, mime_type }: {
+    file_path: string;
+    file_id: string;
+    file_name: string;
+    file_size: number;
+    mime_type: string;
+}): Promise<void> => {
+    try {
+        console.log(`Starting background processing for file: ${file_name} (ID: ${file_id})`);
 
-    res?.write(`data: ${JSON.stringify(eventData)}\n\n`);
-};
+        // Update status to processing
+        await DocumentFile.findOneAndUpdate(
+            { _id: file_id },
+            { processing_status: 'processing' }
+        );
 
-const send_upload_start = ({ uploadId, fileName, fileSize, res }: { uploadId: string, fileName: string, fileSize: number, res: Response }): void => {
-    const eventData = {
-        type: 'start',
-        uploadId,
-        fileName,
-        fileSize,
-        timestamp: new Date().toISOString()
-    };
+        // Process the document (this will handle status updates internally)
+        await document_embeddings_mongodb_service.process_and_store_document({
+            file_path,
+            file_name,
+            file_size,
+            mime_type,
+            file_id
+        });
 
-    res.write(`data: ${JSON.stringify(eventData)}\n\n`);
-};
+        console.log(`Background processing completed for file: ${file_name}`);
 
-const send_upload_error = ({ uploadId, message, res }: { uploadId: string, message: string, res: Response }): void => {
-    const eventData = {
-        type: 'error',
-        uploadId,
-        message,
-        timestamp: new Date().toISOString()
-    };
+    } catch (error: unknown) {
+        const error_message = error instanceof Error ? error.message : 'Unknown error occurred';
+        console.error(`Background processing failed for file ${file_name}:`, error);
 
-    res.write(`data: ${JSON.stringify(eventData)}\n\n`);
-    res.end();
-};
-
-const send_upload_complete = ({ uploadId, data, res }: { uploadId: string, data: TUploadResponse, res: Response }): void => {
-    const eventData = {
-        type: 'complete',
-        uploadId,
-        data,
-        timestamp: new Date().toISOString()
-    };
-
-    res.write(`data: ${JSON.stringify(eventData)}\n\n`);
-    res.end();
+        // Update status to failed
+        await DocumentFile.findOneAndUpdate(
+            { _id: file_id },
+            {
+                processing_status: 'failed',
+                error_message: error_message
+            }
+        );
+    } finally {
+        // Clean up temporary file
+        if (fs.existsSync(file_path)) {
+            fs.unlinkSync(file_path);
+            console.log(`Cleaned up temporary file: ${file_path}`);
+        }
+    }
 };
 
 export const handle_upload = async ({ req, res }: { req: Request, res: Response }) => {
@@ -82,83 +83,83 @@ export const handle_upload = async ({ req, res }: { req: Request, res: Response 
         return;
     }
 
-    const uploadId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, UPLOAD_ID_RANDOM_LENGTH)}`;
-
-    res.setHeader('Content-Type', SSE_HEADERS['Content-Type']);
-    res.setHeader('Cache-Control', SSE_HEADERS['Cache-Control']);
-    res.setHeader('Connection', SSE_HEADERS['Connection']);
-
     try {
-        send_upload_progress({ uploadId, progress: UPLOAD_PROGRESS.STARTED, message: 'Upload started...', res });
-        send_upload_start({ uploadId, fileName: req.file.originalname, fileSize: req.file.size, res });
-
+        // Validate file size
         if (req.file.size === 0) {
-            send_upload_error({ uploadId, message: 'Invalid file upload - file is empty', res });
+            res.status(400).json({ message: 'Invalid file upload - file is empty' });
             return;
         }
 
         if (req.file.size > MAX_FILE_SIZE) {
-            send_upload_error({ uploadId, message: 'File size exceeds 10MB limit', res });
+            res.status(400).json({ message: 'File size exceeds 10MB limit' });
             return;
         }
 
-        send_upload_progress({ uploadId, progress: UPLOAD_PROGRESS.SIZE_VALIDATED, message: 'File size validation passed', res });
-
+        // Validate file extension
         const file_extension = path.extname(req.file.originalname).toLowerCase();
-        const allowed_extensions = ALLOWED_FILE_EXTENSIONS.DOCUMENTS;
-
         if (!is_allowed_extension(file_extension)) {
-            send_upload_error({ uploadId, message: 'File type not supported. Supported formats: PDF, TXT, DOCX, MD', res });
+            res.status(400).json({ message: 'File type not supported. Supported formats: PDF, TXT, DOCX, MD' });
             return;
         }
 
-        send_upload_progress({ uploadId, progress: UPLOAD_PROGRESS.FORMAT_VALIDATED, message: `${file_extension.toUpperCase()} file format validated`, res });
 
-        send_upload_progress({ uploadId, progress: UPLOAD_PROGRESS.TEMP_SAVED, message: 'File saved to temporary storage', res });
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-        send_upload_progress({ uploadId, progress: UPLOAD_PROGRESS.PROCESSING_STARTED, message: 'Starting document processing...', res });
-
-        const processedDocument = await document_embeddings_mongodb_service.process_and_store_document({
-            file_path: req.file.path,
-            file_name: req.file.originalname,
-            file_size: req.file.size,   
-            mime_type: req.file.mimetype,
-            progress_callback: (progress: number, message: string) => {
-                const adjustedProgress = UPLOAD_PROGRESS.PROCESSING_STARTED + (progress * 0.7);
-                send_upload_progress({ uploadId, progress: Math.round(adjustedProgress), message, res });
-            }
-        });
-
-        send_upload_progress({ uploadId, progress: UPLOAD_PROGRESS.CLEANUP_STARTED, message: 'Cleaning up temporary files...', res });
-        if (fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
+        // Move file to permanent uploads folder
+        const uploads_dir = path.join(process.cwd(), 'uploads');
+        if (!fs.existsSync(uploads_dir)) {
+            fs.mkdirSync(uploads_dir, { recursive: true });
         }
-        await new Promise(resolve => setTimeout(resolve, 200));
 
-        send_upload_progress({ uploadId, progress: UPLOAD_PROGRESS.COMPLETED, message: 'Upload completed successfully!', res });
-        send_upload_complete({
-            uploadId,
-            data: {
-                file_id: processedDocument.file_id,
-                file_name: processedDocument.file_name,
-                file_size: processedDocument.file_size,
-                file_type: processedDocument.file_type,
-                chunks_created: processedDocument.chunks_created
-            },
-            res
+        // Create document file record with pending status
+        const document_file = new DocumentFile({
+            file_name: req.file.originalname,
+            file_size: req.file.size,
+            file_type: req.file.mimetype,
+            upload_date: new Date(),
+            processing_status: 'pending',
+            chunk_count: 0
         });
 
-        console.log(`File processed successfully: ${req.file.originalname} (${processedDocument.chunks_created} chunks)`);
+        const saved_document_file = await document_file.save();
+
+
+        // Send immediate success response
+        const response: TUploadResponse = {
+            file_id: saved_document_file._id,
+            file_name: req.file.originalname,
+            file_size: req.file.size,
+            file_type: req.file.mimetype,
+            status: 'pending',
+            message: 'File uploaded successfully. Processing will begin shortly.'
+        };
+        res.status(200).json({
+            message: 'File uploaded successfully. Processing will begin shortly.',
+            data: response
+        })
+
+        // Start background processing (don't await)
+        process_file_in_background({
+            file_path: req.file.path,
+            file_id: saved_document_file._id.toString(),
+            file_name: req.file.originalname,
+            file_size: req.file.size,
+            mime_type: req.file.mimetype
+        }).catch((error) => {
+            console.error('Background processing failed:', error);
+        });
+
+
+        console.log(`File uploaded successfully: ${req.file.originalname} (ID: ${saved_document_file._id}). Background processing started.`);
 
     } catch (error: unknown) {
         const error_message = error instanceof Error ? error.message : 'Unknown error occurred';
-        console.error('File processing error:', error);
-        send_upload_error({ uploadId, message: `File processing failed: ${error_message}`, res });
+        console.error('File upload error:', error);
 
-        if (fs.existsSync(req.file.path)) {
+        // Clean up temporary file if it exists
+        if (req.file?.path && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
         }
+
+        res.status(500).json({ message: `File upload failed: ${error_message}` });
     }
 };
 

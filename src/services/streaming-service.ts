@@ -8,7 +8,13 @@ import { weather_tool } from '../tools/weather-tool';
 import { hybrid_memory_manager } from '../lib/hybrid-memory-manager';
 import { generate_system_prompt } from '../lib/system-prompts';
 import { Types } from 'mongoose';
-import { SSE_HEADERS } from '../constants/file-upload';
+
+// SSE headers for chat streaming
+const SSE_HEADERS = {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+} as const;
 
 export type TStreamingParams = {
     model: LanguageModel;

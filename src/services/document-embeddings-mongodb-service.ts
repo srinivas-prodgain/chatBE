@@ -66,7 +66,7 @@ export type TFileMetadata = {
     file_type: string;
     upload_date: string;
     chunk_count: number;
-    processing_status: 'processing' | 'completed' | 'failed';
+    processing_status: 'pending' | 'processing' | 'completed' | 'failed';
 }
 
 // Function argument types
@@ -75,6 +75,7 @@ type TProcessAndStoreDocumentArgs = {
     file_name: string;
     file_size: number;
     mime_type: string;
+    file_id: string;
     progress_callback?: (progress: number, message: string) => void;
 };
 
@@ -130,27 +131,25 @@ export class DocumentEmbeddingsMongoDBService {
         file_name,
         file_size,
         mime_type,
+        file_id,
         progress_callback
     }: TProcessAndStoreDocumentArgs): Promise<TProcessedDocument> {
 
-        const file_id = crypto.randomUUID();
 
         try {
             // Initial setup
             progress_callback?.(5, 'Initializing file processing...');
             await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_SHORT));
 
-            // Create document file record
-            const document_file = new mg.DocumentFile({
-                file_id: file_id,
-                file_name: file_name,
-                file_size: file_size,
-                file_type: mime_type,
-                upload_date: new Date(),
-                processing_status: 'processing'
-            });
+            // Get or create document file record
+            let document_file = await mg.DocumentFile.findOne({ _id: file_id });
 
-            await document_file.save();
+            if (!document_file) {
+                throw new Error('Document file not found');
+            } else {
+                document_file.processing_status = 'processing';
+                await document_file.save();
+            }
 
             // Extract text from file
             progress_callback?.(10, 'Reading file contents...');
@@ -214,7 +213,7 @@ export class DocumentEmbeddingsMongoDBService {
             progress_callback?.(100, `Successfully processed "${file_name}" with ${chunks.length} chunks`);
 
             return {
-                file_id,
+                file_id: file_id,
                 file_name,
                 file_size,
                 file_type: mime_type,
@@ -229,7 +228,7 @@ export class DocumentEmbeddingsMongoDBService {
             // Update document file status to failed
             try {
                 await mg.DocumentFile.findOneAndUpdate(
-                    { file_id: file_id },
+                    { _id: file_id },
                     {
                         processing_status: 'failed',
                         error_message: error_message
@@ -469,7 +468,7 @@ export class DocumentEmbeddingsMongoDBService {
             console.log(`Deleted ${delete_result.deletedCount} embeddings for file ${file_id}`);
 
             // Delete the file record
-            await mg.DocumentFile.deleteOne({ file_id: file_id });
+            await mg.DocumentFile.deleteOne({ _id: file_id });
             console.log(`Deleted file record for ${file_id}`);
         } catch (error: unknown) {
             const error_message = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -485,7 +484,7 @@ export class DocumentEmbeddingsMongoDBService {
                 .lean();
 
             return files.map(file => ({
-                file_id: file.file_id,
+                file_id: file._id,
                 file_name: file.file_name,
                 file_size: file.file_size,
                 file_type: file.file_type,

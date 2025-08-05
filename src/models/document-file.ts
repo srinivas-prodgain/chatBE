@@ -2,25 +2,18 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export type TDocumentFile = Document & {
     _id: string;
-    file_id: string;
     file_name: string;
     file_size: number;
     file_type: string;
     upload_date: Date;
     chunk_count: number;
-    processing_status: 'processing' | 'completed' | 'failed';
+    processing_status: 'processing' | 'completed' | 'failed' | 'pending';
     error_message?: string;
     created_at: Date;
     updated_at: Date;
 }
 
 const documentFileSchema = new Schema<TDocumentFile>({
-    file_id: {
-        type: String,
-        required: true,
-        unique: true,
-        index: true
-    },
     file_name: {
         type: String,
         required: true,
@@ -47,8 +40,8 @@ const documentFileSchema = new Schema<TDocumentFile>({
     },
     processing_status: {
         type: String,
-        enum: ['processing', 'completed', 'failed'],
-        default: 'processing',
+        enum: ['processing', 'completed', 'failed', 'pending'],
+        default: 'pending',
         index: true
     },
     error_message: {
