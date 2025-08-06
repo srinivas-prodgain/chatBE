@@ -1,8 +1,9 @@
 import { LanguageModel } from "ai";
 import { mistral_model, openai_model } from "../services/ai";
+import { TModelType } from "../types/shared";
 
 type TSwitchModelsArgs = {
-    model: string;
+    model: TModelType;
 }
 
 export const switch_models = ({ model }: TSwitchModelsArgs): LanguageModel => {

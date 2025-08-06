@@ -3,17 +3,16 @@ import { z } from 'zod';
 
 import { mg } from '../../config/mg';
 import { throw_error } from '../../utils/throw-error';
-import { TConversation } from '@/types/conversation';
 
 export const update_conversation = async ({ req, res }: { req: Request, res: Response }) => {
     const { uid } = z_update_conversation_req_params.parse(req.params);
     const { title } = z_update_conversation_req_body.parse(req.body);
 
-    const conversation = await mg.Conversation.findOneAndUpdate<TConversation>(
+    const conversation = await mg.Conversation.findOneAndUpdate(
         { uid },
         { title },
         { new: true }
-    );
+    ).lean();
 
     if (!conversation) {
         throw_error({ message: 'Conversation not found', status_code: 404 });

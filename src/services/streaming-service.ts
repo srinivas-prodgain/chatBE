@@ -7,7 +7,6 @@ import { web_search_tool } from '../tools/web-search-tool';
 import { weather_tool } from '../tools/weather-tool';
 import { hybrid_memory_manager } from '../lib/hybrid-memory-manager';
 import { generate_system_prompt } from '../lib/system-prompts';
-import { Types } from 'mongoose';
 
 // SSE headers for chat streaming
 const SSE_HEADERS = {
@@ -39,7 +38,7 @@ export const streaming_service = {
         }
 
         const { summary, messages_to_send } = await hybrid_memory_manager({
-            conversation_id: conversation._id as Types.ObjectId
+            conversation_id: conversation._id
         });
 
         const { system_content } = generate_system_prompt({

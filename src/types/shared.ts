@@ -1,7 +1,29 @@
 // Shared types used across frontend and backend
 
+
+
+// process status types
+export const processStatus = ['pending', 'processing', 'completed', 'failed'] as const;
+export type TProcessStatus = (typeof processStatus)[number];
+
+
+
+
+// Model types
+
+export const modelTypes = ['openai', 'mistral', 'gemini'] as const;
+
+export type TModelType = (typeof modelTypes)[number];
+
+
 // File-related types
-export type TAllowedFileTypes = 'pdf' | 'txt' | 'docx' | 'md';
+
+
+export const allowedFileTypes = ['pdf', 'txt', 'docx', 'md'] as const;
+export type TAllowedFileTypes = (typeof allowedFileTypes)[number];
+
+
+
 
 export const ALLOWED_FILE_EXTENSIONS: Record<TAllowedFileTypes, string[]> = {
     pdf: ['.pdf'],
@@ -31,7 +53,7 @@ export type TBaseConversation = {
 export type TStreamChatRequest = {
     message: string;
     user_id: string;
-    model: string;
+    model: TModelType;
     selected_file_ids?: string[];
 };
 
@@ -67,15 +89,19 @@ export type TPaginationResponse = {
     total_items: number;
 };
 
+
+// Tool status types
+
 export enum ToolStatus {
     Started = 'started',
     Completed = 'completed',
     Error = 'error'
 }
 
+
 export type TToolStatus = {
     tool: string;
-    status: ToolStatus;
+    status: 'started' | 'completed';
     details?: {
         result_count?: number;
         error?: string;

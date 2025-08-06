@@ -1,6 +1,6 @@
 import { Document, Types } from 'mongoose';
 
-export type TConversation = Document<unknown, any, any> & {
+export type TConversation = Document & {
     uid: string;
     title: string;
     user_id?: string;
@@ -10,6 +10,5 @@ export type TConversation = Document<unknown, any, any> & {
     last_token_count: number;
     summary_version: number;
     updated_at: Date;
-} & {
     _id: Types.ObjectId;
 };

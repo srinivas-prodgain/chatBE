@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
+import helmet from 'helmet';
 
 dotenv.config();
 
@@ -16,6 +17,10 @@ import { globalErrorHandler } from './middleware/errorHandler';
 
 
 const app = express();
+
+app.use(helmet());
+
+
 
 // CORS configuration for SSE and regular requests
 app.use(cors({

@@ -24,6 +24,7 @@ import {
     PROCESSING_DELAY_MEDIUM,
     PROCESSING_DELAY_LONG
 } from '../constants/document-processing';
+import { TProcessStatus } from '@/types/shared';
 
 export type TDocumentMetadata = {
     file_id: string;
@@ -66,7 +67,7 @@ export type TFileMetadata = {
     file_type: string;
     upload_date: string;
     chunk_count: number;
-    processing_status: 'pending' | 'processing' | 'completed' | 'failed';
+    processing_status: TProcessStatus;
 }
 
 // Function argument types

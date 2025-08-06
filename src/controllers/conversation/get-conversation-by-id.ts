@@ -3,14 +3,13 @@ import { z } from 'zod';
 
 import { mg } from '../../config/mg';
 import { throw_error } from '../../utils/throw-error';
-import { TConversation } from '@/types/conversation';
-import { TMessage } from '@/types/message';
+
 
 export const get_conversation_by_id = async ({ req, res }: { req: Request, res: Response }) => {
     const { uid } = z_get_conversation_by_id_req_params.parse(req.params);
 
     // Find conversation by uid
-    const conversation = await mg.Conversation.findOne<TConversation>({ uid });
+    const conversation = await mg.Conversation.findOne({ uid }).lean();
 
     if (!conversation) {
         throw_error({ message: 'Conversation not found', status_code: 404 });
@@ -18,15 +17,18 @@ export const get_conversation_by_id = async ({ req, res }: { req: Request, res: 
     }
 
     // Get messages separately using conversation_id
-    const messages = await mg.ChatMessage.find<Pick<TMessage, 'message' | 'sender' | 'created_at'>>({ conversation_id: conversation._id })
+    const messages = await mg.ChatMessage.find({ conversation_id: conversation._id })
         .sort({ created_at: 1 })
-        .select('message sender created_at');
+        .select('message sender created_at').lean();
+
 
     // Return conversation with messages in the new populated format
     const conversation_with_messages = {
-        ...conversation.toObject(),
+        ...conversation,
         messages
     };
+
+
 
     res.status(200).json({
         data: conversation_with_messages,

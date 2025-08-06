@@ -7,11 +7,12 @@ import { document_embeddings_mongodb_service } from '../../services/document-emb
 import { DocumentFile } from '../../models/document-file';
 import {
     MAX_FILE_SIZE,
-    ALLOWED_FILE_EXTENSIONS
+    ALLOWED_FILE_EXTENSIONS,
 } from '../../constants/file-upload';
+import { TAllowedFileTypes,TProcessStatus } from '@/types/shared';
+
 
 // Type for allowed file extensions
-type TAllowedExtension = '.pdf' | '.txt' | '.docx' | '.md';
 
 // Upload response type for immediate response
 export type TUploadResponse = {
@@ -19,13 +20,13 @@ export type TUploadResponse = {
     file_name: string;
     file_size: number;
     file_type: string;
-    status: 'pending' | 'processing' | 'completed' | 'failed';
+    status: TProcessStatus;
     message: string;
 }
 
 // Type guard function for file extension validation
-const is_allowed_extension = (extension: string): extension is TAllowedExtension => {
-    return ALLOWED_FILE_EXTENSIONS.DOCUMENTS.includes(extension as TAllowedExtension);
+const is_allowed_extension = (extension: string): extension is TAllowedFileTypes => {
+    return ALLOWED_FILE_EXTENSIONS.DOCUMENTS.some(allowed => allowed === extension);
 };
 
 // Background processing function

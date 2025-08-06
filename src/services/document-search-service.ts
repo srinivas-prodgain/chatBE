@@ -51,7 +51,7 @@ export const document_search_service = {
 
             const context_chunks = search_results.flat();
             const filtered_chunks = context_chunks
-                .filter((chunk: string) => chunk && chunk.trim().length > 0)
+                .filter((chunk) => chunk && chunk.trim().length > 0)
                 .slice(0, MAX_CONTEXT_CHUNKS);
 
             if (filtered_chunks.length === 0) {

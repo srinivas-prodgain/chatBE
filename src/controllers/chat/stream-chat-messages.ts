@@ -1,17 +1,22 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 
-import { throw_error } from '../../utils/throw-error';
 import { switch_models } from '../../utils/switch-models';
 import { message_handling_service } from '../../services/message-handling-service';
 import { document_search_service } from '../../services/document-search-service';
 import { streaming_service } from '../../services/streaming-service';
 import { tool_status_service } from '../../services/tool-status-service';
 import { TConversation } from '../../types/conversation';
+import { TModelType, modelTypes } from '../../types/shared';
 
 export const stream_chat_messages = async ({ req, res }: { req: Request, res: Response }) => {
     const { uid } = z_stream_chat_messages_req_params.parse(req.params);
-    const { message, user_id, model, selected_file_ids } = z_stream_chat_messages_req_body.parse(req.body);
+
+    const parsed_body = z_stream_chat_messages_req_body.parse(req.body);
+    const message: string = parsed_body.message;
+    const user_id: string = parsed_body.user_id;
+    const model: TModelType = parsed_body.model;
+    const selected_file_ids: string[] | undefined = parsed_body.selected_file_ids;
 
     const abort_controller = new AbortController();
     const selected_model = switch_models({ model });
@@ -103,6 +108,8 @@ const z_stream_chat_messages_req_params = z.object({
 const z_stream_chat_messages_req_body = z.object({
     message: z.string().min(1, 'message is required'),
     user_id: z.string().min(1, 'user_id is required'),
-    model: z.string().min(1, 'model is required'),
+    model: z.enum(modelTypes, {
+        errorMap: () => ({ message: 'model must be one of: openai, mistral, gemini' })
+    }),
     selected_file_ids: z.array(z.string()).optional(),
 });
