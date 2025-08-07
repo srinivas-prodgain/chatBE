@@ -1,7 +1,6 @@
 import { Document, Types } from 'mongoose';
 
 export type TConversation = Document & {
-    uid: string;
     title: string;
     user_id?: string;
     summary?: string;

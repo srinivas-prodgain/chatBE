@@ -5,7 +5,7 @@ import { asyncHandler } from '../middleware/errorHandler';
 
 const router = express.Router();
 
-router.post('/:uid',
+router.post('/:id',
   asyncHandler(stream_chat_messages)
 );
 

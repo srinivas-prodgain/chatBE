@@ -5,7 +5,7 @@ import { CONVERSATION_TITLE_MAX_LENGTH } from '../constants/file-upload';
 import { Types } from 'mongoose';
 
 export type TMessageHandlingParams = {
-    uid: string;
+    conversation_id: string;
     message: string;
     user_id: string;
 };
@@ -13,13 +13,13 @@ export type TMessageHandlingParams = {
 
 
 export const message_handling_service = {
-    async get_or_create_conversation({ uid, message, user_id }: TMessageHandlingParams): Promise<TConversation> {
-        let conversation = await mg.Conversation.findOne<TConversation>({ uid });
+    async get_or_create_conversation({ conversation_id, message, user_id }: TMessageHandlingParams): Promise<TConversation> {
+        let conversation = await mg.Conversation.findById<TConversation>(conversation_id);
 
         if (!conversation) {
             const title = message.substring(0, CONVERSATION_TITLE_MAX_LENGTH) || 'New Chat';
             conversation = new mg.Conversation({
-                uid,
+                _id: conversation_id,
                 title,
                 user_id
             });

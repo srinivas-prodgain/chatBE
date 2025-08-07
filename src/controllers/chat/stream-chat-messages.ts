@@ -10,7 +10,7 @@ import { TConversation } from '../../types/conversation';
 import { TModelType, modelTypes } from '../../types/shared';
 
 export const stream_chat_messages = async ({ req, res }: { req: Request, res: Response }) => {
-    const { uid } = z_stream_chat_messages_req_params.parse(req.params);
+    const { id } = z_stream_chat_messages_req_params.parse(req.params);
 
     const parsed_body = z_stream_chat_messages_req_body.parse(req.body);
     const message: string = parsed_body.message;
@@ -34,7 +34,7 @@ export const stream_chat_messages = async ({ req, res }: { req: Request, res: Re
 
     try {
         // Get or create conversation and save user message
-        const conversation: TConversation = await message_handling_service.get_or_create_conversation({ uid, message, user_id });
+        const conversation: TConversation = await message_handling_service.get_or_create_conversation({ conversation_id: id, message, user_id });
 
         await message_handling_service.save_user_message({ message, conversation_id: conversation._id });
 
@@ -102,7 +102,7 @@ export const stream_chat_messages = async ({ req, res }: { req: Request, res: Re
 };
 
 const z_stream_chat_messages_req_params = z.object({
-    uid: z.string().min(1, 'uid is required'),
+    id: z.string().min(1, 'id is required'),
 });
 
 const z_stream_chat_messages_req_body = z.object({

@@ -5,11 +5,11 @@ import { mg } from '../../config/mg';
 import { throw_error } from '../../utils/throw-error';
 
 export const update_conversation = async ({ req, res }: { req: Request, res: Response }) => {
-    const { uid } = z_update_conversation_req_params.parse(req.params);
+    const { id } = z_update_conversation_req_params.parse(req.params);
     const { title } = z_update_conversation_req_body.parse(req.body);
 
-    const conversation = await mg.Conversation.findOneAndUpdate(
-        { uid },
+    const conversation = await mg.Conversation.findByIdAndUpdate(
+        id,
         { title },
         { new: true }
     ).lean();
@@ -25,7 +25,7 @@ export const update_conversation = async ({ req, res }: { req: Request, res: Res
 };
 
 const z_update_conversation_req_params = z.object({
-    uid: z.string().min(1, 'uid is required')
+    id: z.string().min(1, 'id is required')
 });
 
 const z_update_conversation_req_body = z.object({

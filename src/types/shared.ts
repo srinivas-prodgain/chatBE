@@ -42,7 +42,7 @@ export type TBaseMessage = {
 
 // Base conversation type
 export type TBaseConversation = {
-    uid: string;
+    _id: string;
     title: string;
     user_id?: string;
     created_at: string;

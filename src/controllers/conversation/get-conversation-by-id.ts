@@ -6,10 +6,10 @@ import { throw_error } from '../../utils/throw-error';
 
 
 export const get_conversation_by_id = async ({ req, res }: { req: Request, res: Response }) => {
-    const { uid } = z_get_conversation_by_id_req_params.parse(req.params);
+    const { id } = z_get_conversation_by_id_req_params.parse(req.params);
 
-    // Find conversation by uid
-    const conversation = await mg.Conversation.findOne({ uid }).lean();
+    // Find conversation by _id
+    const conversation = await mg.Conversation.findById(id).lean();
 
     if (!conversation) {
         throw_error({ message: 'Conversation not found', status_code: 404 });
@@ -37,5 +37,5 @@ export const get_conversation_by_id = async ({ req, res }: { req: Request, res: 
 };
 
 const z_get_conversation_by_id_req_params = z.object({
-    uid: z.string().min(1, 'uid is required')
+    id: z.string().min(1, 'id is required')
 });

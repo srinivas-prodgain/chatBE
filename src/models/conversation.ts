@@ -2,12 +2,6 @@ import mongoose, { Schema } from 'mongoose';
 import { TConversation } from '../types/conversation';
 
 const conversationSchema = new Schema<TConversation>({
-  uid: {
-    type: String,
-    required: true,
-    unique: true,
-    index: true
-  },
   title: {
     type: String,
     required: true,
