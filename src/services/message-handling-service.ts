@@ -29,16 +29,17 @@ export const message_handling_service = {
         return conversation;
     },
 
-    async save_user_message({ message, conversation_id }: { message: string, conversation_id: Types.ObjectId }) {
+    async save_user_message({ message, conversation_id, user_id }: { message: string, conversation_id: Types.ObjectId, user_id: string }) {
         const user_message = new mg.ChatMessage({
             message,
             sender: 'user',
-            conversation_id
+            conversation_id,
+            user_id
         });
         await user_message.save();
     },
 
-    async save_ai_message({ ai_response, conversation_id }: { ai_response: string, conversation_id: Types.ObjectId }) {
+    async save_ai_message({ ai_response, conversation_id, user_id }: { ai_response: string, conversation_id: Types.ObjectId, user_id: string }) {
         if (!ai_response.trim()) {
             return;
         }
@@ -46,7 +47,8 @@ export const message_handling_service = {
         const ai_message = new mg.ChatMessage({
             message: ai_response,
             sender: 'ai',
-            conversation_id
+            conversation_id,
+            user_id
         });
 
         const save_message_promise = ai_message.save();

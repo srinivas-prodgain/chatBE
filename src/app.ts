@@ -14,7 +14,7 @@ import { conversationRouter } from './routes/conversation-routes';
 import { chatRouter } from './routes/chat-routes';
 import { fileRouter } from './routes/file-routes';
 import { globalErrorHandler } from './middleware/errorHandler';
-
+import { authRouter } from './routes/auth';
 
 const app = express();
 
@@ -42,6 +42,7 @@ app.use(express.json());
 app.use('/api/v1/conversations', conversationRouter);
 app.use('/api/v1/stream', chatRouter);
 app.use('/api/v1/files', fileRouter);
+app.use('/api/v1/auth', authRouter);
 
 // Global error handler (must be last)
 app.use(globalErrorHandler);

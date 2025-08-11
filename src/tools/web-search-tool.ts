@@ -35,7 +35,7 @@ export const web_search_tool = tool({
             const response = await tavilyClient.search(query, {
                 maxResults,
                 includeAnswer,
-                searchDepth,
+                searchDepth: 'advanced',
                 includeImages: false,
                 includeRawContent: false
             });

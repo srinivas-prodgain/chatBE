@@ -1,5 +1,5 @@
 // Shared types used across frontend and backend
-
+import { Request } from 'express';
 
 
 // process status types
@@ -105,5 +105,16 @@ export type TToolStatus = {
     details?: {
         result_count?: number;
         error?: string;
+    };
+};
+
+
+
+
+export type TAuthenticatedRequest = Request & {
+    user?: {
+        uid: string;
+        email: string;
+        name?: string;
     };
 };

@@ -8,6 +8,12 @@ const chatMessageSchema = new Schema<TMessage>({
     required: true,
     trim: true
   },
+  user_id: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true
+  },
   sender: {
     type: String,
     enum: ['user', 'ai'],

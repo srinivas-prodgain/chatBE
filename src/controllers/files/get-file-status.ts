@@ -1,12 +1,23 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { z } from 'zod';
 import { mg } from '../../config/mg';
 import { throw_error } from '../../utils/throw-error';
 
-export const get_file_status = async ({ req, res }: { req: Request, res: Response }) => {
+
+import { TAuthenticatedRequest } from '../../types/shared';
+
+export const get_file_status = async ({ req, res }: { req: TAuthenticatedRequest, res: Response }) => {
     const { file_id } = z_get_file_status_req_params.parse(req.params);
 
-    const document_file = await mg.DocumentFile.findById(file_id);
+    const firebase_user = req.user;
+
+    const db_user = await mg.User.findOne({ firebase_uid: firebase_user?.uid }).lean();
+    if (!db_user) {
+        throw_error({ message: 'User not found', status_code: 404 });
+        return;
+    }
+
+    const document_file = await mg.DocumentFile.findOne({ _id: file_id, user_id: db_user._id.toString() });
 
     if (!document_file) {
         throw_error({ message: "File not found", status_code: 404 });

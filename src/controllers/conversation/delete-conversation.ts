@@ -1,29 +1,36 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { z } from 'zod';
 import mongoose from 'mongoose';
 
 import { mg } from '../../config/mg';
 import { throw_error } from '../../utils/throw-error';
 
-export const delete_conversation = async ({ req, res }: { req: Request, res: Response }) => {
+import { TAuthenticatedRequest } from '../../types/shared';
+
+export const delete_conversation = async ({ req, res }: { req: TAuthenticatedRequest, res: Response }) => {
     const { id } = z_delete_conversation_req_params.parse(req.params);
 
-    const conversation = await mg.Conversation.findById(id);
+    const firebase_user = req.user;
+
+    const db_user = await mg.User.findOne({ firebase_uid: firebase_user?.uid }).lean();
+    if (!db_user) {
+        throw_error({ message: 'User not found', status_code: 404 });
+        return;
+    }
+
+    const conversation = await mg.Conversation.findOne({ _id: id, user_id: db_user._id });
     if (!conversation) {
         throw_error({ message: 'Conversation not found', status_code: 404 });
     }
 
     const session = await mongoose.startSession();
     await session.withTransaction(async () => {
-        // Delete all messages associated with this conversation
         await mg.ChatMessage.deleteMany({ conversation_id: conversation?._id }, { session });
-
-        // Delete the conversation
         await mg.Conversation.findByIdAndDelete(id, { session });
     });
     await session.endSession();
 
-    return res.status(200).json({
+    res.status(200).json({
         message: "Conversation deleted successfully",
         data: null
     });

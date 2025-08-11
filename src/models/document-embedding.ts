@@ -6,6 +6,7 @@ export type TDocumentEmbedding = Document & {
     chunk_id: string;
     content: string;
     embedding: number[];
+    user_id: Schema.Types.ObjectId;
     metadata: {
         file_name: string;
         file_size: number;
@@ -38,6 +39,12 @@ const documentEmbeddingSchema = new Schema<TDocumentEmbedding>({
     embedding: {
         type: [Number],
         required: true
+    },
+    user_id: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+        index: true
     },
     metadata: {
         file_name: {

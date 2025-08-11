@@ -1,5 +1,8 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+const processing_status = ['processing', 'completed', 'failed', 'pending'] as const;
+type TProcessingStatus = (typeof processing_status)[number];
+
 export type TDocumentFile = Document & {
     _id: string;
     file_name: string;
@@ -7,7 +10,8 @@ export type TDocumentFile = Document & {
     file_type: string;
     upload_date: Date;
     chunk_count: number;
-    processing_status: 'processing' | 'completed' | 'failed' | 'pending';
+    user_id: Schema.Types.ObjectId;
+    processing_status: TProcessingStatus;
     error_message?: string;
     created_at: Date;
     updated_at: Date;
@@ -38,9 +42,15 @@ const documentFileSchema = new Schema<TDocumentFile>({
         required: true,
         default: 0
     },
+    user_id: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+        index: true
+    },
     processing_status: {
         type: String,
-        enum: ['processing', 'completed', 'failed', 'pending'],
+        enum: processing_status,
         default: 'pending',
         index: true
     },

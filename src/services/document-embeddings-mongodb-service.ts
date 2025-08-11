@@ -78,6 +78,7 @@ type TProcessAndStoreDocumentArgs = {
     mime_type: string;
     file_id: string;
     progress_callback?: (progress: number, message: string) => void;
+    user_id: string;
 };
 
 type TExtractTextFromFileArgs = {
@@ -100,6 +101,7 @@ type TFindLastSentenceEndArgs = {
 type TStoreInMongodbArgs = {
     chunks: TDocumentChunk[];
     progress_callback?: (progress: number, message: string) => void;
+    user_id: string;
 };
 
 type TSearchSimilarDocumentsArgs = {
@@ -109,12 +111,17 @@ type TSearchSimilarDocumentsArgs = {
 
 type TDeleteDocumentArgs = {
     file_id: string;
+    user_id: string;
 };
 
 type TSearchInMultipleFilesArgs = {
     file_ids: string[];
     query: string;
     max_results?: number;
+};
+
+type TGetAllFilesArgs = {
+    user_id: string;
 };
 
 export class DocumentEmbeddingsMongoDBService {
@@ -133,7 +140,8 @@ export class DocumentEmbeddingsMongoDBService {
         file_size,
         mime_type,
         file_id,
-        progress_callback
+        progress_callback,
+        user_id
     }: TProcessAndStoreDocumentArgs): Promise<TProcessedDocument> {
 
 
@@ -143,7 +151,7 @@ export class DocumentEmbeddingsMongoDBService {
             await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_SHORT));
 
             // Get or create document file record
-            let document_file = await mg.DocumentFile.findOne({ _id: file_id });
+            let document_file = await mg.DocumentFile.findOne({ _id: file_id, user_id: user_id });
 
             if (!document_file) {
                 throw new Error('Document file not found');
@@ -203,7 +211,7 @@ export class DocumentEmbeddingsMongoDBService {
 
             // Generate embeddings and store in MongoDB
             progress_callback?.(85, 'Generating vector embeddings with VoyageAI...');
-            await this.store_in_mongodb({ chunks, progress_callback });
+            await this.store_in_mongodb({ chunks, progress_callback, user_id });
             console.log("file is there after storing in mongodb", fs.existsSync(file_path))
 
             // Update document file status
@@ -365,7 +373,7 @@ export class DocumentEmbeddingsMongoDBService {
         return last_pos;
     }
 
-    private async store_in_mongodb({ chunks, progress_callback }: TStoreInMongodbArgs): Promise<void> {
+    private async store_in_mongodb({ chunks, progress_callback, user_id }: TStoreInMongodbArgs): Promise<void> {
         try {
             console.log(`Processing ${chunks.length} chunks with 3 RPM rate limit (${EMBEDDING_RATE_LIMIT_DELAY} seconds between requests)`);
 
@@ -390,7 +398,8 @@ export class DocumentEmbeddingsMongoDBService {
                     chunk_id: chunk.id,
                     content: chunk.content,
                     metadata: chunk.metadata,
-                    embedding: embedding
+                    embedding: embedding,
+                    user_id: user_id
                 };
 
                 await mg.DocumentEmbedding.create(document_to_insert);
@@ -462,14 +471,14 @@ export class DocumentEmbeddingsMongoDBService {
         }
     }
 
-    async delete_document({ file_id }: TDeleteDocumentArgs): Promise<void> {
+    async delete_document({ file_id, user_id }: TDeleteDocumentArgs): Promise<void> {
         try {
             // Delete all embeddings for this file
-            const delete_result = await mg.DocumentEmbedding.deleteMany({ file_id: file_id });
+            const delete_result = await mg.DocumentEmbedding.deleteMany({ file_id: file_id, user_id: user_id });
             console.log(`Deleted ${delete_result.deletedCount} embeddings for file ${file_id}`);
 
             // Delete the file record
-            await mg.DocumentFile.deleteOne({ _id: file_id });
+            await mg.DocumentFile.deleteOne({ _id: file_id, user_id: user_id });
             console.log(`Deleted file record for ${file_id}`);
         } catch (error: unknown) {
             const error_message = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -478,9 +487,9 @@ export class DocumentEmbeddingsMongoDBService {
         }
     }
 
-    async get_all_files(): Promise<TFileMetadata[]> {
+    async get_all_files({ user_id }: TGetAllFilesArgs): Promise<TFileMetadata[]> {
         try {
-            const files = await mg.DocumentFile.find({})
+            const files = await mg.DocumentFile.find({ user_id: user_id })
                 .sort({ upload_date: -1 })
                 .lean();
 

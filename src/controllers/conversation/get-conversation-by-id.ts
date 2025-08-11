@@ -1,28 +1,35 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { z } from 'zod';
 
 import { mg } from '../../config/mg';
 import { throw_error } from '../../utils/throw-error';
 
 
-export const get_conversation_by_id = async ({ req, res }: { req: Request, res: Response }) => {
+import { TAuthenticatedRequest } from '../../types/shared';
+
+export const get_conversation_by_id = async ({ req, res }: { req: TAuthenticatedRequest, res: Response }) => {
     const { id } = z_get_conversation_by_id_req_params.parse(req.params);
 
-    // Find conversation by _id
-    const conversation = await mg.Conversation.findById(id).lean();
+    const firebase_user = req.user;
+
+    const db_user = await mg.User.findOne({ firebase_uid: firebase_user?.uid }).lean();
+    if (!db_user) {
+        throw_error({ message: 'User not found', status_code: 404 });
+        return;
+    }
+
+    const conversation = await mg.Conversation.findOne({ _id: id, user_id: db_user._id }).lean();
 
     if (!conversation) {
         throw_error({ message: 'Conversation not found', status_code: 404 });
         return;
     }
 
-    // Get messages separately using conversation_id
-    const messages = await mg.ChatMessage.find({ conversation_id: conversation._id })
+    const messages = await mg.ChatMessage.find({ conversation_id: conversation._id, user_id: db_user._id })
         .sort({ created_at: 1 })
         .select('message sender created_at').lean();
 
 
-    // Return conversation with messages in the new populated format
     const conversation_with_messages = {
         ...conversation,
         messages

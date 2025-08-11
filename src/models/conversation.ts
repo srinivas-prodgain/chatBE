@@ -8,9 +8,10 @@ const conversationSchema = new Schema<TConversation>({
     trim: true
   },
   user_id: {
-    type: String,
-    required: false,
-    index: true
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true,
   },
   summary: {
     type: String,

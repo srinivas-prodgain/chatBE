@@ -1,7 +1,6 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
 
 import { document_embeddings_mongodb_service } from '../../services/document-embeddings-mongodb-service';
 import { DocumentFile } from '../../models/document-file';
@@ -9,7 +8,9 @@ import {
     MAX_FILE_SIZE,
     ALLOWED_FILE_EXTENSIONS,
 } from '../../constants/file-upload';
-import { TAllowedFileTypes,TProcessStatus } from '@/types/shared';
+import { TAllowedFileTypes,TProcessStatus } from '../../types/shared';
+import { throw_error } from '../../utils/throw-error';
+import { mg } from '../../config/mg';
 
 
 // Type for allowed file extensions
@@ -20,9 +21,13 @@ export type TUploadResponse = {
     file_name: string;
     file_size: number;
     file_type: string;
+    user_id: string;
     status: TProcessStatus;
     message: string;
 }
+
+
+import { TAuthenticatedRequest } from '../../types/shared';
 
 // Type guard function for file extension validation
 const is_allowed_extension = (extension: string): extension is TAllowedFileTypes => {
@@ -30,12 +35,13 @@ const is_allowed_extension = (extension: string): extension is TAllowedFileTypes
 };
 
 // Background processing function
-const process_file_in_background = async ({ file_path, file_id, file_name, file_size, mime_type }: {
+const process_file_in_background = async ({ file_path, file_id, file_name, file_size, mime_type, user_id }: {
     file_path: string;
     file_id: string;
     file_name: string;
     file_size: number;
     mime_type: string;
+    user_id: string;
 }): Promise<void> => {
     try {
         console.log(`Starting background processing for file: ${file_name} (ID: ${file_id})`);
@@ -52,7 +58,8 @@ const process_file_in_background = async ({ file_path, file_id, file_name, file_
             file_name,
             file_size,
             mime_type,
-            file_id
+            file_id,
+            user_id
         });
 
         console.log(`Background processing completed for file: ${file_name}`);
@@ -78,9 +85,18 @@ const process_file_in_background = async ({ file_path, file_id, file_name, file_
     }
 };
 
-export const handle_upload = async ({ req, res }: { req: Request, res: Response }) => {
+export const handle_upload = async ({ req, res }: { req: TAuthenticatedRequest, res: Response }) => {
     if (!req.file) {
         res.status(400).json({ message: 'No file uploaded' });
+        return;
+    }
+
+    const firebase_user = req.user;
+
+
+    const db_user = await mg.User.findOne({ firebase_uid: firebase_user?.uid }).lean();
+    if (!db_user) {
+        throw_error({ message: 'User not found', status_code: 404 });
         return;
     }
 
@@ -115,6 +131,7 @@ export const handle_upload = async ({ req, res }: { req: Request, res: Response 
             file_name: req.file.originalname,
             file_size: req.file.size,
             file_type: req.file.mimetype,
+            user_id: db_user._id,
             upload_date: new Date(),
             processing_status: 'pending',
             chunk_count: 0
@@ -129,6 +146,7 @@ export const handle_upload = async ({ req, res }: { req: Request, res: Response 
             file_name: req.file.originalname,
             file_size: req.file.size,
             file_type: req.file.mimetype,
+            user_id: db_user._id.toString(),
             status: 'pending',
             message: 'File uploaded successfully. Processing will begin shortly.'
         };
@@ -143,7 +161,8 @@ export const handle_upload = async ({ req, res }: { req: Request, res: Response 
             file_id: saved_document_file._id.toString(),
             file_name: req.file.originalname,
             file_size: req.file.size,
-            mime_type: req.file.mimetype
+            mime_type: req.file.mimetype,
+            user_id: db_user._id.toString()
         }).catch((error) => {
             console.error('Background processing failed:', error);
         });
