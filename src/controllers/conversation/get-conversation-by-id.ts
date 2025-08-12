@@ -10,22 +10,16 @@ import { TAuthenticatedRequest } from '../../types/shared';
 export const get_conversation_by_id = async ({ req, res }: { req: TAuthenticatedRequest, res: Response }) => {
     const { id } = z_get_conversation_by_id_req_params.parse(req.params);
 
-    const firebase_user = req.user;
+    const user_id = req.user?.user_id;
 
-    const db_user = await mg.User.findOne({ firebase_uid: firebase_user?.uid }).lean();
-    if (!db_user) {
-        throw_error({ message: 'User not found', status_code: 404 });
-        return;
-    }
-
-    const conversation = await mg.Conversation.findOne({ _id: id, user_id: db_user._id }).lean();
+    const conversation = await mg.Conversation.findOne({ _id: id, user_id }).lean();
 
     if (!conversation) {
         throw_error({ message: 'Conversation not found', status_code: 404 });
         return;
     }
 
-    const messages = await mg.ChatMessage.find({ conversation_id: conversation._id, user_id: db_user._id })
+    const messages = await mg.ChatMessage.find({ conversation_id: conversation._id, user_id })
         .sort({ created_at: 1 })
         .select('message sender created_at').lean();
 

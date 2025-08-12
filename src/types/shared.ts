@@ -114,7 +114,9 @@ export type TToolStatus = {
 export type TAuthenticatedRequest = Request & {
     user?: {
         uid: string;
+        user_id: string;
         email: string;
         name?: string;
+        role: string;
     };
 };

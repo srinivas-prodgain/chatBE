@@ -9,8 +9,7 @@ import {
     ALLOWED_FILE_EXTENSIONS,
 } from '../../constants/file-upload';
 import { TAllowedFileTypes,TProcessStatus } from '../../types/shared';
-import { throw_error } from '../../utils/throw-error';
-import { mg } from '../../config/mg';
+
 
 
 // Type for allowed file extensions
@@ -91,14 +90,8 @@ export const handle_upload = async ({ req, res }: { req: TAuthenticatedRequest, 
         return;
     }
 
-    const firebase_user = req.user;
+    const user_id = req.user?.user_id;
 
-
-    const db_user = await mg.User.findOne({ firebase_uid: firebase_user?.uid }).lean();
-    if (!db_user) {
-        throw_error({ message: 'User not found', status_code: 404 });
-        return;
-    }
 
     try {
         // Validate file size
@@ -131,7 +124,7 @@ export const handle_upload = async ({ req, res }: { req: TAuthenticatedRequest, 
             file_name: req.file.originalname,
             file_size: req.file.size,
             file_type: req.file.mimetype,
-            user_id: db_user._id,
+            user_id: user_id || "",
             upload_date: new Date(),
             processing_status: 'pending',
             chunk_count: 0
@@ -146,7 +139,7 @@ export const handle_upload = async ({ req, res }: { req: TAuthenticatedRequest, 
             file_name: req.file.originalname,
             file_size: req.file.size,
             file_type: req.file.mimetype,
-            user_id: db_user._id.toString(),
+            user_id: user_id || "",
             status: 'pending',
             message: 'File uploaded successfully. Processing will begin shortly.'
         };
@@ -162,7 +155,7 @@ export const handle_upload = async ({ req, res }: { req: TAuthenticatedRequest, 
             file_name: req.file.originalname,
             file_size: req.file.size,
             mime_type: req.file.mimetype,
-            user_id: db_user._id.toString()
+            user_id: user_id || ""
         }).catch((error) => {
             console.error('Background processing failed:', error);
         });

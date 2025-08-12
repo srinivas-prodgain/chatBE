@@ -2,31 +2,24 @@ import { Response } from 'express';
 import { z } from 'zod';
 
 import { mg } from '../../config/mg';
-import { throw_error } from '../../utils/throw-error';
 
 import { TAuthenticatedRequest } from '../../types/shared';
 
 export const get_all_conversations = async ({ req, res }: { req: TAuthenticatedRequest, res: Response }) => {
     const { page, limit } = z_get_all_conversations_req_query.parse(req.query);
 
-    const firebase_user = req.user;
-
-    const db_user = await mg.User.findOne({ firebase_uid: firebase_user?.uid }).lean();
-    if (!db_user) {
-        throw_error({ message: 'User not found', status_code: 404 });
-        return;
-    }
+    const user_id = req.user?.user_id;
 
     const skip = (page - 1) * limit;
 
-    const get_conversations = mg.Conversation.find({ user_id: db_user._id })
+    const get_conversations = mg.Conversation.find({ user_id })
         .sort({ updated_at: -1 })
         .skip(skip)
         .limit(limit)
         .lean();
 
 
-    const get_total_items = mg.Conversation.countDocuments({ user_id: db_user._id });
+    const get_total_items = mg.Conversation.countDocuments({ user_id });
 
     const [conversations_data, total_items] = await Promise.all([
         get_conversations,

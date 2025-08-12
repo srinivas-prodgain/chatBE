@@ -10,15 +10,9 @@ import { TAuthenticatedRequest } from '../../types/shared';
 export const delete_conversation = async ({ req, res }: { req: TAuthenticatedRequest, res: Response }) => {
     const { id } = z_delete_conversation_req_params.parse(req.params);
 
-    const firebase_user = req.user;
+    const user_id = req.user?.user_id;
 
-    const db_user = await mg.User.findOne({ firebase_uid: firebase_user?.uid }).lean();
-    if (!db_user) {
-        throw_error({ message: 'User not found', status_code: 404 });
-        return;
-    }
-
-    const conversation = await mg.Conversation.findOne({ _id: id, user_id: db_user._id });
+    const conversation = await mg.Conversation.findOne({ _id: id, user_id });
     if (!conversation) {
         throw_error({ message: 'Conversation not found', status_code: 404 });
     }

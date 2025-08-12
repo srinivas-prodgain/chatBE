@@ -8,25 +8,16 @@ import { streaming_service } from '../../services/streaming-service';
 import { tool_status_service } from '../../services/tool-status-service';
 import { TConversation } from '../../types/conversation';
 import { TModelType, modelTypes } from '../../types/shared';
-import { throw_error } from '../../utils/throw-error';
-import { mg } from '../../config/mg';
 
 import { TAuthenticatedRequest } from '../../types/shared';
 
 export const stream_chat_messages = async ({ req, res }: { req: TAuthenticatedRequest, res: Response }) => {
     const { id } = z_stream_chat_messages_req_params.parse(req.params);
 
-    const firebase_user = req.user;
-
-    const db_user = await mg.User.findOne({ firebase_uid: firebase_user?.uid }).lean();
-    if (!db_user) {
-        throw_error({ message: 'User not found', status_code: 404 });
-        return;
-    }
+    const user_id = req.user?.user_id;
 
     const parsed_body = z_stream_chat_messages_req_body.parse(req.body);
     const message: string = parsed_body.message;
-    const user_id: string = db_user._id.toString();
     const model: TModelType = parsed_body.model;
     const selected_file_ids: string[] | undefined = parsed_body.selected_file_ids;
 
@@ -46,9 +37,9 @@ export const stream_chat_messages = async ({ req, res }: { req: TAuthenticatedRe
 
     try {
         // Get or create conversation and save user message
-        const conversation: TConversation = await message_handling_service.get_or_create_conversation({ conversation_id: id, message, user_id });
+        const conversation: TConversation = await message_handling_service.get_or_create_conversation({ conversation_id: id, message, user_id: user_id || '' });
 
-        await message_handling_service.save_user_message({ message, conversation_id: conversation._id, user_id });
+        await message_handling_service.save_user_message({ message, conversation_id: conversation._id, user_id: user_id || '' });
 
         // Setup streaming headers
         streaming_service.setup_streaming_headers(res);
@@ -85,7 +76,7 @@ export const stream_chat_messages = async ({ req, res }: { req: TAuthenticatedRe
         await message_handling_service.save_ai_message({
             ai_response,
             conversation_id: conversation._id,
-            user_id
+            user_id: user_id || ''
         });
 
     } catch (stream_error: unknown) {

@@ -9,15 +9,9 @@ import { TAuthenticatedRequest } from '../../types/shared';
 export const get_file_status = async ({ req, res }: { req: TAuthenticatedRequest, res: Response }) => {
     const { file_id } = z_get_file_status_req_params.parse(req.params);
 
-    const firebase_user = req.user;
+    const user_id = req.user?.user_id;
 
-    const db_user = await mg.User.findOne({ firebase_uid: firebase_user?.uid }).lean();
-    if (!db_user) {
-        throw_error({ message: 'User not found', status_code: 404 });
-        return;
-    }
-
-    const document_file = await mg.DocumentFile.findOne({ _id: file_id, user_id: db_user._id.toString() });
+    const document_file = await mg.DocumentFile.findOne({ _id: file_id, user_id: user_id || "" });
 
     if (!document_file) {
         throw_error({ message: "File not found", status_code: 404 });

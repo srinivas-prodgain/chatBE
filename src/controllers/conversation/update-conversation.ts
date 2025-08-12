@@ -10,16 +10,10 @@ export const update_conversation = async ({ req, res }: { req: TAuthenticatedReq
     const { id } = z_update_conversation_req_params.parse(req.params);
     const { title } = z_update_conversation_req_body.parse(req.body);
 
-    const firebase_user = req.user;
-    
-    const db_user = await mg.User.findOne({ firebase_uid: firebase_user?.uid }).lean();
-    if (!db_user) {
-        throw_error({ message: 'User not found', status_code: 404 });
-        return;
-    }
+    const user_id = req.user?.user_id;
 
     const conversation = await mg.Conversation.findOneAndUpdate(
-        { _id: id, user_id: db_user._id },
+        { _id: id, user_id },
         { title },
         { new: true }
     ).lean();
