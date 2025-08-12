@@ -15,6 +15,8 @@ import { chatRouter } from './routes/chat-routes';
 import { fileRouter } from './routes/file-routes';
 import { globalErrorHandler } from './middleware/errorHandler';
 import { authRouter } from './routes/auth';
+import { admin_routes } from './routes/admin';
+import { user_routes } from './routes/user';
 
 const app = express();
 
@@ -43,7 +45,8 @@ app.use('/api/v1/conversations', conversationRouter);
 app.use('/api/v1/stream', chatRouter);
 app.use('/api/v1/files', fileRouter);
 app.use('/api/v1/auth', authRouter);
-
+app.use('/api/v1/admin', admin_routes);
+app.use('/api/v1/user', user_routes);
 // Global error handler (must be last)
 app.use(globalErrorHandler);
 
