@@ -1,7 +1,7 @@
 import { Router } from "express";
 import get_all_users from "../controllers/admin/get-all-users";
 import { authenticate_user } from "../middleware/auth";
-import { rbac } from "../middleware/rbac";
+import { rbac } from "../middleware/rbac-to-admin-route";
 
 const router = Router();
 

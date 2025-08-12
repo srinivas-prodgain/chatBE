@@ -14,15 +14,14 @@ export const login_with_google = async ({ req, res }: { req: TAuthenticatedReque
     if (!db_user) {
         is_new_user = true;
 
-        db_user = new mg.User({
+
+        db_user = await mg.User.create({
             firebase_uid: firebase_user?.uid || '',
             name: firebase_user?.name || '',
             email: firebase_user?.email || '',
             role: 'user',
             last_login: new Date()
         });
-
-        await db_user.save();
 
         if (!db_user) {
             throw_error({ message: 'Failed to create new user', status_code: 500 });
