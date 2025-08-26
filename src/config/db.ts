@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 console.log("database.js file is excecuted")
 
 
-const MONGO_URL = process.env.MONGODB_URL || ''
+const MONGO_URL = process.env.MONGODB_URL
 
 
 if (!MONGO_URL) {
@@ -10,7 +10,7 @@ if (!MONGO_URL) {
 }
 
 
-const connectToDataBase = async () => {
+const connect_to_db = async () => {
     console.log("connecting to DataBase.........")
     try {
         await mongoose.connect(MONGO_URL)
@@ -23,4 +23,4 @@ const connectToDataBase = async () => {
 
 
 
-export { connectToDataBase };
+export { connect_to_db };

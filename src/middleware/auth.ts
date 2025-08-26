@@ -2,11 +2,23 @@ import { Response, NextFunction } from 'express';
 import admin from '../config/firebase';
 import { throw_error } from '../utils/throw-error';
 
-import { TAuthenticatedRequest } from '../types/shared';
-import {mg} from '../config/mg';
+import { mg } from '../config/mg';
 import { ObjectId } from 'mongodb';
+import { Request } from 'express';
 
-const authenticate_user = async (req: TAuthenticatedRequest, res: Response, next: NextFunction) => {
+
+export type TAuthMiddleware = Request & {
+    user?: {
+        uid: string;
+        user_id: string;
+        email: string;
+        name?: string;
+        role: string;
+    };
+};
+
+
+const authenticate_user = async (req: TAuthMiddleware, res: Response, next: NextFunction) => {
 
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) {
@@ -21,7 +33,7 @@ const authenticate_user = async (req: TAuthenticatedRequest, res: Response, next
         return;
     }
 
-    const db_user = await mg.User.findOne<{_id: ObjectId, role: string}>({firebase_uid: decoded_token.uid})
+    const db_user = await mg.User.findOne<{ _id: ObjectId, role: string }>({ firebase_uid: decoded_token.uid })
     if (!db_user) {
         throw_error({ message: 'User not found', status_code: 401 });
         return;

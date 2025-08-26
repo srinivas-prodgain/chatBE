@@ -1,4 +1,3 @@
-import { Response } from 'express';
 import { z } from 'zod';
 
 import { switch_models } from '../../utils/switch-models';
@@ -7,19 +6,15 @@ import { document_search_service } from '../../services/document-search-service'
 import { streaming_service } from '../../services/streaming-service';
 import { tool_status_service } from '../../services/tool-status-service';
 import { TConversation } from '../../types/conversation';
-import { TModelType, modelTypes } from '../../types/shared';
+import { modelTypes } from '../../types/shared';
 
-import { TAuthenticatedRequest } from '../../types/shared';
+import { TResponseRequest } from '../../types/shared';
 
-export const stream_chat_messages = async ({ req, res }: { req: TAuthenticatedRequest, res: Response }) => {
+export const stream_chat_messages = async ({ req, res }: TResponseRequest) => {
     const { id } = z_stream_chat_messages_req_params.parse(req.params);
+    const { message, model, selected_file_ids } = z_stream_chat_messages_req_body.parse(req.body);
 
-    const user_id = req.user?.user_id;
-
-    const parsed_body = z_stream_chat_messages_req_body.parse(req.body);
-    const message: string = parsed_body.message;
-    const model: TModelType = parsed_body.model;
-    const selected_file_ids: string[] | undefined = parsed_body.selected_file_ids;
+    const user_id = req.user.user_id;
 
     const abort_controller = new AbortController();
     const selected_model = switch_models({ model });
@@ -30,16 +25,16 @@ export const stream_chat_messages = async ({ req, res }: { req: TAuthenticatedRe
 
     // Setup cleanup on client disconnect
     res.on('close', async () => {
-        console.log('Client disconnected, aborting stream');
+        // console.log('Client disconnected, aborting stream');
         tool_status_service.cleanup_tool_status_handler(tool_status_handler);
         abort_controller.abort();
     });
 
     try {
         // Get or create conversation and save user message
-        const conversation: TConversation = await message_handling_service.get_or_create_conversation({ conversation_id: id, message, user_id: user_id || '' });
+        const conversation: TConversation = await message_handling_service.get_or_create_conversation({ conversation_id: id, message, user_id });
 
-        await message_handling_service.save_user_message({ message, conversation_id: conversation._id, user_id: user_id || '' });
+        await message_handling_service.save_user_message({ message, conversation_id: conversation._id, user_id });
 
         // Setup streaming headers
         streaming_service.setup_streaming_headers(res);
@@ -51,8 +46,8 @@ export const stream_chat_messages = async ({ req, res }: { req: TAuthenticatedRe
             intelligent_search_enabled
         });
 
-        console.log("Starting stream with model:", model);
-        console.log("User message for RAG search:", message);
+        // console.log("Starting stream with model:", model);
+        // console.log("User message for RAG search:", message);
 
         // Handle streaming
         const ai_response = await streaming_service.handle_streaming({
@@ -70,20 +65,20 @@ export const stream_chat_messages = async ({ req, res }: { req: TAuthenticatedRe
         }
         res.end();
 
-        console.log("Stream completed. AI response length:", ai_response.length);
+        // console.log("Stream completed. AI response length:", ai_response.length);
 
         // Save AI response
         await message_handling_service.save_ai_message({
             ai_response,
             conversation_id: conversation._id,
-            user_id: user_id || ''
+            user_id
         });
 
     } catch (stream_error: unknown) {
         // Handle AbortError specifically
         const is_abort_error = stream_error instanceof Error && stream_error.name === 'AbortError';
         if (is_abort_error || abort_controller.signal.aborted) {
-            console.log('Stream was cancelled by client - this is normal behavior');
+            // console.log('Stream was cancelled by client - this is normal behavior');
             if (!res.headersSent) {
                 res.status(200).end();
             } else {
@@ -93,7 +88,7 @@ export const stream_chat_messages = async ({ req, res }: { req: TAuthenticatedRe
         }
 
         // Handle actual errors
-        console.error('Unexpected error in chat stream:', stream_error);
+        // console.error('Unexpected error in chat stream:', stream_error);
         if (!res.headersSent) {
             res.status(500).json({ error: 'Internal Server Error' });
         } else {
@@ -111,7 +106,6 @@ const z_stream_chat_messages_req_params = z.object({
 
 const z_stream_chat_messages_req_body = z.object({
     message: z.string().min(1, 'message is required'),
-    user_id: z.string().min(1, 'user_id is required'),
     model: z.enum(modelTypes, {
         errorMap: () => ({ message: 'model must be one of: openai, mistral, gemini' })
     }),

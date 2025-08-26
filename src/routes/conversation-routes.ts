@@ -1,5 +1,5 @@
 import express, { Router } from 'express';
-import { asyncHandler } from '../middleware/errorHandler';
+import { async_handler } from '../middleware/global-error-handler';
 
 
 import { get_all_conversations } from '../controllers/conversation/get-all-conversations';
@@ -14,28 +14,27 @@ import { authenticate_user } from '../middleware/auth';
 
 const router: Router = express.Router();
 
+router.use(authenticate_user);
+
+
 router.post('/',
-  authenticate_user,
-  asyncHandler(create_conversation)
+  async_handler(create_conversation)
 );
+
 router.get('/user',
-  authenticate_user,
-  asyncHandler(get_all_conversations)
+  async_handler(get_all_conversations)
 );
 router.get('/:id',
-  authenticate_user,
-  asyncHandler(get_conversation_by_id)
+  async_handler(get_conversation_by_id)
 );
 router.put('/:id',
-  authenticate_user,
-  asyncHandler(update_conversation)
+  async_handler(update_conversation)
 );
 router.delete('/:id',
-  authenticate_user,
-  asyncHandler(delete_conversation)
+  async_handler(delete_conversation)
 );
 
 
 
 
-export const conversationRouter = router;
+export const conversation_routes = router;

@@ -1,5 +1,5 @@
 // Shared types used across frontend and backend
-import { Request } from 'express';
+import { Request, Response } from 'express';
 
 
 // process status types
@@ -11,7 +11,7 @@ export type TProcessStatus = (typeof processStatus)[number];
 
 // Model types
 
-export const modelTypes = ['openai', 'mistral', 'gemini'] as const;
+export const modelTypes = ['openai', 'mistral', 'gemini', 'openrouter'] as const;
 
 export type TModelType = (typeof modelTypes)[number];
 
@@ -112,11 +112,16 @@ export type TToolStatus = {
 
 
 export type TAuthenticatedRequest = Request & {
-    user?: {
+    user: {
         uid: string;
         user_id: string;
         email: string;
         name?: string;
         role: string;
     };
+};
+
+export type TResponseRequest = {
+    req: TAuthenticatedRequest;
+    res: Response;
 };

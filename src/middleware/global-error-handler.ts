@@ -28,7 +28,7 @@ type TMongoError = Error & {
     errors?: Record<string, TMongoValidationError>;
 };
 
-export const globalErrorHandler = (
+export const global_error_handler = (
     error: Error,
     req: Request,
     res: Response,
@@ -100,7 +100,7 @@ export const globalErrorHandler = (
     res.status(statusCode).json(errorResponse);
 };
 
-export const asyncHandler = (fn: Function) => {
+export const async_handler = (fn: Function) => {
     return (req: Request, res: Response, next: NextFunction) => {
         Promise.resolve(fn({ req, res, next })).catch(next);
     };

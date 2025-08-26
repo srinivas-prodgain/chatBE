@@ -1,6 +1,5 @@
 import { mg } from "../../config/mg";
-import { TAuthenticatedRequest } from "../../types/shared";
-import { Response } from "express";
+import { TResponseRequest } from "../../types/shared";
 import { z } from "zod";
 
 
@@ -16,11 +15,11 @@ const z_get_all_users_req_query = z.object({
 });
 
 
-const get_all_users = async (req: TAuthenticatedRequest, res: Response) => {
+const get_all_users = async ({ req, res }: TResponseRequest) => {
   const { page, limit } = z_get_all_users_req_query.parse(req.query);
   const skip = (page - 1) * limit;
 
-  const get_users = mg.User.find({})
+  const get_users = mg.User.find()
     .select('-permissions')
     .sort({ created_at: -1 })
     .skip(skip)

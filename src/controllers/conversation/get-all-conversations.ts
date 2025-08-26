@@ -1,14 +1,13 @@
-import { Response } from 'express';
 import { z } from 'zod';
 
 import { mg } from '../../config/mg';
 
-import { TAuthenticatedRequest } from '../../types/shared';
+import { TResponseRequest } from '../../types/shared';
 
-export const get_all_conversations = async ({ req, res }: { req: TAuthenticatedRequest, res: Response }) => {
+export const get_all_conversations = async ({ req, res }: TResponseRequest) => {
     const { page, limit } = z_get_all_conversations_req_query.parse(req.query);
 
-    const user_id = req.user?.user_id;
+    const user_id = req.user.user_id;
 
     const skip = (page - 1) * limit;
 

@@ -1,18 +1,15 @@
-import { Response } from 'express';
 import { z } from 'zod';
 import mongoose from 'mongoose';
 
 import { mg } from '../../config/mg';
 import { throw_error } from '../../utils/throw-error';
 
-import { TAuthenticatedRequest } from '../../types/shared';
+import { TResponseRequest } from '../../types/shared';
 
-export const delete_conversation = async ({ req, res }: { req: TAuthenticatedRequest, res: Response }) => {
+export const delete_conversation = async ({ req, res }: TResponseRequest) => {
     const { id } = z_delete_conversation_req_params.parse(req.params);
 
-    const user_id = req.user?.user_id;
-
-    const conversation = await mg.Conversation.findOne({ _id: id, user_id });
+    const conversation = await mg.Conversation.findOne({ _id: id });
     if (!conversation) {
         throw_error({ message: 'Conversation not found', status_code: 404 });
     }
@@ -25,8 +22,7 @@ export const delete_conversation = async ({ req, res }: { req: TAuthenticatedReq
     await session.endSession();
 
     res.status(200).json({
-        message: "Conversation deleted successfully",
-        data: null
+        message: "Conversation deleted successfully"
     });
 };
 

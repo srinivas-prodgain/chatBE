@@ -2,7 +2,7 @@ import express, { Router } from 'express';
 
 import { handle_upload } from '../controllers/files/upload-file';
 import { upload_middleware } from '../middleware/file-upload';
-import { asyncHandler } from '../middleware/errorHandler';
+import { async_handler } from '../middleware/global-error-handler';
 import { get_all_files_meta_data } from '../controllers/files/get-all-files-meta-data';
 import { delete_file_from_vector_db } from '../controllers/files/delete-file-from-vector-db';
 import { get_file_status } from '../controllers/files/get-file-status';
@@ -10,20 +10,17 @@ import { authenticate_user } from '../middleware/auth';
 
 const router: Router = express.Router();
 
-// Get all uploaded files
-router.get('/', authenticate_user, asyncHandler(get_all_files_meta_data));
+router.use(authenticate_user);
 
-// Get file processing status
-router.get('/status/:file_id', authenticate_user, asyncHandler(get_file_status));
+router.get('/', async_handler(get_all_files_meta_data));
 
-// Delete file from vector db
-router.delete('/delete/:file_id', authenticate_user, asyncHandler(delete_file_from_vector_db));
+router.get('/status/:file_id', async_handler(get_file_status));
 
-// File upload endpoint with asynchronous processing
+router.delete('/delete/:file_id', async_handler(delete_file_from_vector_db));
+
 router.post('/upload',
-    upload_middleware.single('file'), // Handle single file upload with field name 'file'
-    authenticate_user,
-    asyncHandler(handle_upload)
+    upload_middleware.single('file'),
+    async_handler(handle_upload)
 );
 
-export const fileRouter = router; 
+export const file_routes = router; 

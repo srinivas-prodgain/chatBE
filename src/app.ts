@@ -9,14 +9,14 @@ dotenv.config();
 import { env } from './config/env';
 
 
-import { connectToDataBase } from './config/db';
-import { conversationRouter } from './routes/conversation-routes';
-import { chatRouter } from './routes/chat-routes';
-import { fileRouter } from './routes/file-routes';
-import { globalErrorHandler } from './middleware/errorHandler';
-import { authRouter } from './routes/auth';
-import { admin_routes } from './routes/admin';
-import { user_routes } from './routes/user';
+import { connect_to_db } from './config/db';
+import { conversation_routes } from './routes/conversation-routes';
+import { chat_routes } from './routes/chat-routes';
+import { file_routes } from './routes/file-routes';
+import { global_error_handler } from './middleware/global-error-handler';
+import { auth_routes } from './routes/auth-routes';
+import { admin_routes } from './routes/admin-routes';
+import { user_routes } from './routes/user-routes';
 
 const app = express();
 
@@ -41,19 +41,19 @@ app.use(cors({
 app.use(express.json());
 
 // Routes
-app.use('/api/v1/conversations', conversationRouter);
-app.use('/api/v1/stream', chatRouter);
-app.use('/api/v1/files', fileRouter);
-app.use('/api/v1/auth', authRouter);
+app.use('/api/v1/conversations', conversation_routes);
+app.use('/api/v1/stream', chat_routes);
+app.use('/api/v1/files', file_routes);
+app.use('/api/v1/auth', auth_routes);
 app.use('/api/v1/admin', admin_routes);
 app.use('/api/v1/user', user_routes);
 // Global error handler (must be last)
-app.use(globalErrorHandler);
+app.use(global_error_handler);
 
 const PORT = env.PORT;
 
 app.listen(PORT, async () => {
-    await connectToDataBase();
+    await connect_to_db();
     console.log('Connected to database');
     console.log(`Server is running on port ${PORT}`);
 });

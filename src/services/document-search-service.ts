@@ -1,4 +1,4 @@
-import { document_embeddings_mongodb_service } from './document-embeddings-mongodb-service';
+import { document_embeddings_mongodb_service } from '../classes/document-embeddings-mongodb-service';
 import { analyzeQuery } from '../lib/query-analyzer';
 import { MAX_CONTEXT_CHUNKS } from '../constants/document-processing';
 

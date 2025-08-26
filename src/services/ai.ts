@@ -2,6 +2,12 @@ import { openai } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createMistral } from '@ai-sdk/mistral';
 import { VoyageAIClient } from 'voyageai';
+import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+
+const openrouter = createOpenRouter({
+    apiKey: process.env.OPENROUTER_API_KEY,
+    baseURL: 'https://openrouter.ai/api/v1',
+});
 
 export const openai_model = openai('gpt-4o-mini');
 
@@ -15,7 +21,10 @@ const mistral = createMistral({
     baseURL: 'https://api.mistral.ai/v1',
 });
 
+
+
 export const mistral_model = mistral('mistral-large-latest');
+export const openrouter_model = openrouter.chat('gpt-4o');
 
 type TGetEmbeddingArgs = {
     text: string;

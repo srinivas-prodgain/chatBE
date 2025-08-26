@@ -7,7 +7,7 @@ import mammoth from 'mammoth';
 import MarkdownIt from 'markdown-it';
 
 import { mg } from '../config/mg';
-import { get_embedding } from './ai';
+import { get_embedding } from '../services/ai';
 import {
     DEFAULT_CHUNK_SIZE,
     DEFAULT_OVERLAP_SIZE,
@@ -77,7 +77,6 @@ type TProcessAndStoreDocumentArgs = {
     file_size: number;
     mime_type: string;
     file_id: string;
-    progress_callback?: (progress: number, message: string) => void;
     user_id: string;
 };
 
@@ -100,7 +99,6 @@ type TFindLastSentenceEndArgs = {
 
 type TStoreInMongodbArgs = {
     chunks: TDocumentChunk[];
-    progress_callback?: (progress: number, message: string) => void;
     user_id: string;
 };
 
@@ -111,7 +109,6 @@ type TSearchSimilarDocumentsArgs = {
 
 type TDeleteDocumentArgs = {
     file_id: string;
-    user_id: string;
 };
 
 type TSearchInMultipleFilesArgs = {
@@ -140,14 +137,12 @@ export class DocumentEmbeddingsMongoDBService {
         file_size,
         mime_type,
         file_id,
-        progress_callback,
         user_id
     }: TProcessAndStoreDocumentArgs): Promise<TProcessedDocument> {
 
 
         try {
             // Initial setup
-            progress_callback?.(5, 'Initializing file processing...');
             await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_SHORT));
 
             // Get or create document file record
@@ -161,38 +156,31 @@ export class DocumentEmbeddingsMongoDBService {
             }
 
             // Extract text from file
-            progress_callback?.(10, 'Reading file contents...');
             await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_MEDIUM));
 
-            progress_callback?.(25, `Extracting text from ${path.extname(file_name).toUpperCase()} file...`);
             const extracted_text = await this.extract_text_from_file({ file_path, mime_type });
-            console.log("file is there after extracting text", fs.existsSync(file_path))
+            // console.log("file is there after extracting text", fs.existsSync(file_path))
 
             if (!extracted_text || extracted_text.trim().length === 0) {
                 throw new Error('The file appears to be empty or contains no readable text. Please ensure the file has content and try uploading again.');
             }
 
-            progress_callback?.(40, `Extracted ${extracted_text.length} characters of text`);
             await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_LONG));
 
             // Chunk the text
-            progress_callback?.(50, 'Analyzing text structure...');
             await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_MEDIUM));
 
-            progress_callback?.(60, 'Creating optimized text chunks...');
             const text_chunks = this.chunk_text({ text: extracted_text });
-            console.log("text_chunks", text_chunks);
-            console.log("file is there after chunking", fs.existsSync(file_path))
+            // console.log("text_chunks", text_chunks);
+            // console.log("file is there after chunking", fs.existsSync(file_path))
 
             if (text_chunks.length === 0) {
                 throw new Error('Failed to create text chunks');
             }
 
-            progress_callback?.(70, `Created ${text_chunks.length} text chunks for processing`);
             await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_LONG));
 
-            // Prepare data
-            progress_callback?.(75, 'Preparing vector embeddings data...');
+            // Prepare data 
             const chunks: TDocumentChunk[] = text_chunks.map((chunk, index) => ({
                 id: `${file_id}_chunk_${index}`,
                 content: chunk,
@@ -210,16 +198,13 @@ export class DocumentEmbeddingsMongoDBService {
             await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_MEDIUM));
 
             // Generate embeddings and store in MongoDB
-            progress_callback?.(85, 'Generating vector embeddings with VoyageAI...');
-            await this.store_in_mongodb({ chunks, progress_callback, user_id });
-            console.log("file is there after storing in mongodb", fs.existsSync(file_path))
+            await this.store_in_mongodb({ chunks, user_id });
+            //console.log("file is there after storing in mongodb", fs.existsSync(file_path))
 
             // Update document file status
             document_file.processing_status = 'completed';
             document_file.chunk_count = chunks.length;
             await document_file.save();
-
-            progress_callback?.(100, `Successfully processed "${file_name}" with ${chunks.length} chunks`);
 
             return {
                 file_id: file_id,
@@ -247,13 +232,12 @@ export class DocumentEmbeddingsMongoDBService {
                 console.error('Error updating document file status:', update_error);
             }
 
-            progress_callback?.(0, `Error: ${error_message}`);
             throw new Error(`Document processing failed: ${error_message}`);
         }
     }
 
     private async extract_text_from_file({ file_path, mime_type }: TExtractTextFromFileArgs): Promise<string> {
-        console.log('Extracting text from file:', file_path);
+        // console.log('Extracting text from file:', file_path);
 
         // Validate file exists before reading
         if (!fs.existsSync(file_path)) {
@@ -373,16 +357,15 @@ export class DocumentEmbeddingsMongoDBService {
         return last_pos;
     }
 
-    private async store_in_mongodb({ chunks, progress_callback, user_id }: TStoreInMongodbArgs): Promise<void> {
+    private async store_in_mongodb({ chunks, user_id }: TStoreInMongodbArgs): Promise<void> {
         try {
-            console.log(`Processing ${chunks.length} chunks with 3 RPM rate limit (${EMBEDDING_RATE_LIMIT_DELAY} seconds between requests)`);
+            // console.log(`Processing ${chunks.length} chunks with 3 RPM rate limit (${EMBEDDING_RATE_LIMIT_DELAY} seconds between requests)`);
 
             for (let i = 0; i < chunks.length; i++) {
                 const chunk = chunks[i];
 
                 // Calculate progress from 85% to 95% (embeddings portion of overall upload)
                 const progress = EMBEDDING_PROGRESS_BASE + Math.floor((i / chunks.length) * EMBEDDING_PROGRESS_RANGE);
-                progress_callback?.(progress, `Generating embedding for chunk ${i + 1}/${chunks.length}...`);
 
                 // Generate embedding for this single chunk
                 const embedding = await get_embedding({ text: chunk.content });
@@ -408,13 +391,12 @@ export class DocumentEmbeddingsMongoDBService {
                 if (i < chunks.length - 1) {
                     // Show countdown during wait time
                     for (let countdown = EMBEDDING_RATE_LIMIT_DELAY; countdown > 0; countdown--) {
-                        progress_callback?.(progress, `Rate limit wait: ${countdown}s remaining... (${chunks.length - i - 1} chunks left)`);
                         await new Promise(resolve => setTimeout(resolve, 1000));
                     }
                 }
             }
 
-            console.log(`Successfully stored ${chunks.length} chunks with embeddings in MongoDB`);
+            // console.log(`Successfully stored ${chunks.length} chunks with embeddings in MongoDB`);
         } catch (error: unknown) {
             const error_message = error instanceof Error ? error.message : 'Unknown error occurred';
             console.error('Error storing in MongoDB:', error);
@@ -471,15 +453,15 @@ export class DocumentEmbeddingsMongoDBService {
         }
     }
 
-    async delete_document({ file_id, user_id }: TDeleteDocumentArgs): Promise<void> {
+    async delete_document({ file_id }: TDeleteDocumentArgs): Promise<void> {
         try {
             // Delete all embeddings for this file
-            const delete_result = await mg.DocumentEmbedding.deleteMany({ file_id: file_id, user_id: user_id });
-            console.log(`Deleted ${delete_result.deletedCount} embeddings for file ${file_id}`);
+            const delete_result = await mg.DocumentEmbedding.deleteMany({ file_id: file_id });
+            // console.log(`Deleted ${delete_result.deletedCount} embeddings for file ${file_id}`);
 
             // Delete the file record
-            await mg.DocumentFile.deleteOne({ _id: file_id, user_id: user_id });
-            console.log(`Deleted file record for ${file_id}`);
+            await mg.DocumentFile.deleteOne({ _id: file_id });
+            // console.log(`Deleted file record for ${file_id}`);
         } catch (error: unknown) {
             const error_message = error instanceof Error ? error.message : 'Unknown error occurred';
             console.error('Error deleting document:', error);

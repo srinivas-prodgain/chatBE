@@ -1,14 +1,17 @@
 import express from 'express';
 
 import { stream_chat_messages } from '../controllers/chat/stream-chat-messages';
-import { asyncHandler } from '../middleware/errorHandler';
+import { async_handler } from '../middleware/global-error-handler';
+
 import { authenticate_user } from '../middleware/auth';
+
 
 const router = express.Router();
 
+router.use(authenticate_user);
+
 router.post('/:id',
-  authenticate_user,
-  asyncHandler(stream_chat_messages)
+  async_handler(stream_chat_messages)
 );
 
-export const chatRouter = router;
+export const chat_routes = router;
